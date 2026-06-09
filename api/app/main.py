@@ -1,3 +1,35 @@
-from fastapi import FastAPI
+from contextlib import asynccontextmanager
 
-app = FastAPI()
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.core.config import get_settings
+from app.core.supabase import create_supabase_client
+from app.routers import auth
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    settings = get_settings()
+    app.state.supabase = await create_supabase_client(settings)
+    yield
+    app.state.supabase = None
+
+
+app = FastAPI(lifespan=lifespan)
+
+settings = get_settings()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origin_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(auth.router)
+
+
+@app.get("/health")
+async def health() -> dict[str, str]:
+    return {"status": "ok"}
