@@ -1,3 +1,5 @@
+import type { Interview } from "@/lib/interviews";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export type User = {
@@ -76,6 +78,21 @@ export const api = {
   getMe() {
     return request<User>("/auth/me");
   },
+
+  createInterview(category: string) {
+    return request<Interview>("/interviews", {
+      method: "POST",
+      body: JSON.stringify({ category }),
+    });
+  },
+
+  listInterviews() {
+    return request<Interview[]>("/interviews");
+  },
+
+  getInterview(id: string) {
+    return request<Interview>(`/interviews/${id}`);
+  },
 };
 
 export function getApiUrl() {
@@ -103,4 +120,35 @@ export async function getMeServer(
   }
 
   return response.json() as Promise<User>;
+}
+
+async function requestServer<T>(
+  path: string,
+  cookieList: Array<{ name: string; value: string }>,
+): Promise<T> {
+  const cookieHeader = buildCookieHeader(cookieList);
+
+  const response = await fetch(`${API_URL}${path}`, {
+    headers: { cookie: cookieHeader },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new ApiError(response.status, await parseError(response));
+  }
+
+  return response.json() as Promise<T>;
+}
+
+export async function listInterviewsServer(
+  cookieList: Array<{ name: string; value: string }>,
+): Promise<Interview[]> {
+  return requestServer<Interview[]>("/interviews", cookieList);
+}
+
+export async function getInterviewServer(
+  cookieList: Array<{ name: string; value: string }>,
+  id: string,
+): Promise<Interview> {
+  return requestServer<Interview>(`/interviews/${id}`, cookieList);
 }

@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.core.supabase import create_supabase_client
-from app.routers import auth
+from app.routers import auth, interviews
 
 
 @asynccontextmanager
@@ -28,6 +28,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(interviews.router)
 
 
 @app.get("/health")

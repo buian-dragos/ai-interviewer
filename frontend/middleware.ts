@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 const AUTH_ROUTES = ["/login", "/signup"];
-const PROTECTED_ROUTES = ["/home"];
+const PROTECTED_ROUTES = ["/home", "/interview"];
 
 async function isAuthenticated(request: NextRequest): Promise<boolean> {
   const cookieHeader = request.headers.get("cookie");
@@ -49,5 +49,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/home/:path*", "/login", "/signup"],
+  matcher: ["/home/:path*", "/interview/:path*", "/login", "/signup"],
 };
