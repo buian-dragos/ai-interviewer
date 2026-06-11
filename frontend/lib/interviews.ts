@@ -1,6 +1,21 @@
 export type InterviewStatus = "in_progress" | "completed" | "abandoned";
 
-export type AnswerDepth = "core" | "follow_up";
+export type AnswerDepth = "shallow" | "adequate" | "deep";
+
+export type SentimentLabel = "positive" | "negative" | "neutral";
+
+export type KeywordMatch = {
+  term: string;
+  score: number;
+};
+
+export type AnswerEvaluation = {
+  sentiment_label: SentimentLabel;
+  sentiment_score: number;
+  keywords: KeywordMatch[];
+  answer_depth: AnswerDepth;
+  answered_question: boolean;
+};
 
 export type Interview = {
   id: string;
@@ -18,7 +33,7 @@ export type InterviewQuestion = {
   question: string;
   answer: string | null;
   answered_at: string | null;
-  answer_depth: AnswerDepth;
+  answer_depth: AnswerDepth | null;
   follows_question_id: string | null;
   core_sequence: number;
 };
@@ -27,6 +42,7 @@ export type SubmitAnswerResult = {
   saved: InterviewQuestion;
   questions: InterviewQuestion[];
   next_question_id: string | null;
+  evaluation: AnswerEvaluation | null;
 };
 
 export function isQuestionSubmitted(question: InterviewQuestion): boolean {
@@ -34,7 +50,7 @@ export function isQuestionSubmitted(question: InterviewQuestion): boolean {
 }
 
 export function isFollowUpStep(question: InterviewQuestion): boolean {
-  return question.answer_depth === "follow_up";
+  return question.follows_question_id != null;
 }
 
 export function getCoreProgressValue(question: InterviewQuestion): number {
@@ -74,7 +90,7 @@ export function isLastTimelineStep(
 }
 
 export function isCoreFiveStep(question: InterviewQuestion): boolean {
-  return question.answer_depth === "core" && question.core_sequence === 5;
+  return question.follows_question_id == null && question.core_sequence === 5;
 }
 
 export function isFinished(interview: Interview): boolean {

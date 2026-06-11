@@ -153,12 +153,7 @@ export function InterviewSession({ interview }: InterviewSessionProps) {
       return;
     }
 
-    const isCore = !isFollowUpStep(currentQuestion);
-    if (isCore) {
-      setIsEvaluating(true);
-    } else {
-      setIsSaving(true);
-    }
+    setIsEvaluating(true);
 
     try {
       const result = await api.submitInterviewAnswer(
@@ -186,7 +181,7 @@ export function InterviewSession({ interview }: InterviewSessionProps) {
         return;
       }
 
-      if (isCore && savedIndex >= 0) {
+      if (savedIndex >= 0) {
         setCurrentStepIndex(savedIndex);
         setAnswer(result.saved.answer ?? trimmed);
       }
@@ -197,7 +192,6 @@ export function InterviewSession({ interview }: InterviewSessionProps) {
           : "Could not save your answer.";
       toast.error(message);
     } finally {
-      setIsSaving(false);
       setIsEvaluating(false);
     }
   }

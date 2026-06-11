@@ -5,11 +5,20 @@ from uuid import UUID
 from supabase import AsyncClient
 
 from app.schemas.interviews import (
+    AnswerEvaluation,
     InterviewQuestionResponse,
     InterviewResponse,
     SubmitAnswerResponse,
 )
-from app.services.gemini_service import GeminiError, format_current_stage, get_gemini_service
+from app.services.answer_evaluation_service import evaluate_answer
+from app.services.gemini_service import (
+    GeminiError,
+    CORE_QUESTION_USER_CONTENT,
+    FOLLOW_UP_USER_CONTENT,
+    OPENING_USER_CONTENT,
+    format_current_stage,
+    get_gemini_service,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,9 +59,12 @@ class InterviewService:
         )
 
     def _core_sequence(self, row: dict) -> int:
-        if row["answer_depth"] == "core":
+        if row.get("follows_question_id") is None:
             return row["sequence"]
         return row["sequence"] // 100
+
+    def _is_follow_up(self, row: dict) -> bool:
+        return row.get("follows_question_id") is not None
 
     def _follow_up_sequence(self, core_sequence: int) -> int:
         return core_sequence * 100 + 1
@@ -64,40 +76,29 @@ class InterviewService:
             question=row["question"],
             answer=row.get("answer"),
             answered_at=row.get("answered_at"),
-            answer_depth=row["answer_depth"],
+            answer_depth=row.get("answer_depth"),
+            answered_question=row.get("answered_question"),
             follows_question_id=row.get("follows_question_id"),
             core_sequence=self._core_sequence(row),
         )
 
-    def _build_core_questions(
-        self, interview_id: str, category: str, first_question: str
-    ) -> list[dict]:
-        questions = [
-            {
-                "interview_id": interview_id,
-                "sequence": 1,
-                "question": first_question,
-                "answer_depth": "core",
-            }
-        ]
-        for sequence, template in enumerate(CORE_QUESTION_TEMPLATES[1:], start=2):
-            questions.append(
-                {
-                    "interview_id": interview_id,
-                    "sequence": sequence,
-                    "question": template.format(category=category),
-                    "answer_depth": "core",
-                }
-            )
-        return questions
+    def _build_first_question_row(
+        self, interview_id: str, first_question: str
+    ) -> dict:
+        return {
+            "interview_id": interview_id,
+            "sequence": 1,
+            "question": first_question,
+        }
 
     async def _generate_first_question(self, category: str) -> str:
         fallback = CORE_QUESTION_TEMPLATES[0].format(category=category)
         try:
             return await get_gemini_service().generate_interview_turn(
                 category=category,
-                current_stage=format_current_stage("core", 1),
+                current_stage=format_current_stage(is_follow_up=False, core_sequence=1),
                 history=[],
+                user_content=OPENING_USER_CONTENT,
             )
         except GeminiError as exc:
             logger.warning("Gemini failed to generate Q1, using template: %s", exc.message)
@@ -106,26 +107,162 @@ class InterviewService:
             logger.exception("Unexpected error generating Q1, using template")
             return fallback
 
-    def _should_create_follow_up(self, question_row: dict) -> bool:
-        """Mock: always add a follow-up after core question 1."""
+    def _should_create_follow_up(
+        self,
+        question_row: dict,
+        evaluation: AnswerEvaluation | None,
+    ) -> bool:
+        if evaluation is None or self._is_follow_up(question_row):
+            return False
         return (
-            question_row["answer_depth"] == "core"
-            and self._core_sequence(question_row) == 1
+            evaluation.answer_depth == "shallow"
+            or not evaluation.answered_question
         )
+
+    def _build_transcript_history(
+        self, questions: list[InterviewQuestionResponse]
+    ) -> list[tuple[str, str]]:
+        history: list[tuple[str, str]] = []
+        for question in questions:
+            if not question.answer:
+                continue
+            history.append(("model", question.question))
+            answer_text = question.answer
+            if question.answer_depth is not None:
+                addressed = (
+                    "yes"
+                    if question.answered_question
+                    else "no"
+                    if question.answered_question is not None
+                    else "unknown"
+                )
+                answer_text = (
+                    f"{question.answer}\n"
+                    f"[Evaluation: depth={question.answer_depth}, "
+                    f"addressed_question={addressed}]"
+                )
+            history.append(("user", answer_text))
+        return history
+
+    async def _generate_core_question(
+        self,
+        category: str,
+        core_sequence: int,
+        history: list[tuple[str, str]],
+    ) -> str:
+        fallback = CORE_QUESTION_TEMPLATES[core_sequence - 1].format(
+            category=category
+        )
+        try:
+            return await get_gemini_service().generate_interview_turn(
+                category=category,
+                current_stage=format_current_stage(
+                    is_follow_up=False, core_sequence=core_sequence
+                ),
+                history=history,
+                user_content=CORE_QUESTION_USER_CONTENT,
+            )
+        except GeminiError as exc:
+            logger.warning(
+                "Gemini failed to generate core Q%s, using template: %s",
+                core_sequence,
+                exc.message,
+            )
+            return fallback
+        except Exception:
+            logger.exception(
+                "Unexpected error generating core Q%s, using template",
+                core_sequence,
+            )
+            return fallback
+
+    async def _generate_follow_up_question(
+        self,
+        category: str,
+        core_sequence: int,
+        history: list[tuple[str, str]],
+    ) -> str:
+        try:
+            return await get_gemini_service().generate_interview_turn(
+                category=category,
+                current_stage=format_current_stage(
+                    is_follow_up=True, core_sequence=core_sequence
+                ),
+                history=history,
+                user_content=FOLLOW_UP_USER_CONTENT,
+            )
+        except GeminiError as exc:
+            logger.warning(
+                "Gemini failed to generate follow-up, using template: %s",
+                exc.message,
+            )
+            return FOLLOW_UP_TEMPLATE
+        except Exception:
+            logger.exception("Unexpected error generating follow-up, using template")
+            return FOLLOW_UP_TEMPLATE
+
+    def _should_generate_next_core(
+        self, question_row: dict, follow_up_created: bool
+    ) -> bool:
+        core_sequence = self._core_sequence(question_row)
+        if core_sequence >= 5:
+            return False
+        if self._is_follow_up(question_row):
+            return True
+        return not follow_up_created
+
+    async def _core_question_exists(
+        self, interview_id: str, sequence: int
+    ) -> bool:
+        result = (
+            await self.supabase.table("interview_questions")
+            .select("id")
+            .eq("interview_id", interview_id)
+            .eq("sequence", sequence)
+            .is_("follows_question_id", "null")
+            .limit(1)
+            .execute()
+        )
+        return bool(result.data)
+
+    async def _persist_answer_evaluation(
+        self,
+        interview_id: str,
+        question_id: str,
+        evaluation: AnswerEvaluation,
+    ) -> None:
+        keywords_payload = [keyword.model_dump() for keyword in evaluation.keywords]
+        try:
+            await (
+                self.supabase.table("interview_questions")
+                .update(
+                    {
+                        "sentiment_label": evaluation.sentiment_label,
+                        "sentiment_score": evaluation.sentiment_score,
+                        "keywords": keywords_payload,
+                        "answer_depth": evaluation.answer_depth,
+                        "answered_question": evaluation.answered_question,
+                    }
+                )
+                .eq("id", question_id)
+                .eq("interview_id", interview_id)
+                .execute()
+            )
+        except Exception as exc:
+            raise InterviewError(str(exc)) from exc
 
     def _order_question_timeline(
         self, questions: list[InterviewQuestionResponse]
     ) -> list[InterviewQuestionResponse]:
         """Place each follow-up immediately after its parent core question."""
         core_questions = sorted(
-            (question for question in questions if question.answer_depth == "core"),
+            (question for question in questions if question.follows_question_id is None),
             key=lambda question: question.sequence,
         )
         follow_ups_by_parent = {
             follow_up.follows_question_id: follow_up
             for follow_up in questions
-            if follow_up.answer_depth == "follow_up"
-            and follow_up.follows_question_id is not None
+            if follow_up.follows_question_id is not None
         }
 
         ordered: list[InterviewQuestionResponse] = []
@@ -143,7 +280,7 @@ class InterviewService:
             await self.supabase.table("interview_questions")
             .select(
                 "id, sequence, question, answer, answered_at, "
-                "answer_depth, follows_question_id"
+                "answer_depth, answered_question, follows_question_id"
             )
             .eq("interview_id", interview_id)
             .order("sequence")
@@ -151,6 +288,21 @@ class InterviewService:
         )
         questions = [self._to_question_response(row) for row in result.data or []]
         return self._order_question_timeline(questions)
+
+    async def _get_question_by_id(
+        self, interview_id: str, question_id: str
+    ) -> dict | None:
+        result = (
+            await self.supabase.table("interview_questions")
+            .select("id, question, answer, follows_question_id")
+            .eq("interview_id", interview_id)
+            .eq("id", question_id)
+            .limit(1)
+            .execute()
+        )
+        if not result.data:
+            return None
+        return result.data[0]
 
     async def _get_follow_up_for_parent(
         self, interview_id: str, parent_question_id: str
@@ -160,7 +312,6 @@ class InterviewService:
             .select("id")
             .eq("interview_id", interview_id)
             .eq("follows_question_id", parent_question_id)
-            .eq("answer_depth", "follow_up")
             .limit(1)
             .execute()
         )
@@ -230,11 +381,7 @@ class InterviewService:
         try:
             await (
                 self.supabase.table("interview_questions")
-                .insert(
-                    self._build_core_questions(
-                        interview_id, category, first_question
-                    )
-                )
+                .insert(self._build_first_question_row(interview_id, first_question))
                 .execute()
             )
         except Exception as exc:
@@ -387,7 +534,7 @@ class InterviewService:
                 await self.supabase.table("interview_questions")
                 .select(
                     "id, sequence, question, answer, answered_at, "
-                    "answer_depth, follows_question_id"
+                    "answer_depth, answered_question, follows_question_id"
                 )
                 .eq("id", question_id_str)
                 .eq("interview_id", interview_id_str)
@@ -420,12 +567,60 @@ class InterviewService:
 
         saved = self._to_question_response(update_result.data[0])
 
-        if self._should_create_follow_up(question_row):
+        evaluation: AnswerEvaluation | None = None
+        parent_question: str | None = None
+        parent_answer: str | None = None
+        if self._is_follow_up(question_row):
+            parent_id = question_row.get("follows_question_id")
+            if parent_id:
+                parent_row = await self._get_question_by_id(
+                    interview_id_str, str(parent_id)
+                )
+                if parent_row:
+                    parent_question = parent_row["question"]
+                    parent_answer = parent_row.get("answer")
+
+        try:
+            evaluation = await evaluate_answer(
+                question=question_row["question"],
+                answer=stripped,
+                category=interview.category,
+                parent_question=parent_question,
+                parent_answer=parent_answer,
+            )
+            await self._persist_answer_evaluation(
+                interview_id_str,
+                question_id_str,
+                evaluation,
+            )
+            saved = saved.model_copy(
+                update={
+                    "answer_depth": evaluation.answer_depth,
+                    "answered_question": evaluation.answered_question,
+                }
+            )
+        except Exception:
+            logger.exception(
+                "Answer evaluation failed for question %s; answer saved without analysis",
+                question_id_str,
+            )
+
+        follow_up_created = False
+        if self._should_create_follow_up(question_row, evaluation):
             existing_follow_up = await self._get_follow_up_for_parent(
                 interview_id_str, question_id_str
             )
             if existing_follow_up is None:
                 core_sequence = self._core_sequence(question_row)
+                questions_for_history = await self._fetch_all_questions(
+                    interview_id_str
+                )
+                history = self._build_transcript_history(questions_for_history)
+                follow_up_question = await self._generate_follow_up_question(
+                    category=interview.category,
+                    core_sequence=core_sequence,
+                    history=history,
+                )
                 try:
                     await (
                         self.supabase.table("interview_questions")
@@ -433,9 +628,39 @@ class InterviewService:
                             {
                                 "interview_id": interview_id_str,
                                 "sequence": self._follow_up_sequence(core_sequence),
-                                "question": FOLLOW_UP_TEMPLATE,
-                                "answer_depth": "follow_up",
+                                "question": follow_up_question,
                                 "follows_question_id": question_id_str,
+                            }
+                        )
+                        .execute()
+                    )
+                    follow_up_created = True
+                except Exception as exc:
+                    raise InterviewError(str(exc)) from exc
+
+        if self._should_generate_next_core(question_row, follow_up_created):
+            completed_core = self._core_sequence(question_row)
+            next_sequence = completed_core + 1
+            if not await self._core_question_exists(
+                interview_id_str, next_sequence
+            ):
+                questions_for_history = await self._fetch_all_questions(
+                    interview_id_str
+                )
+                history = self._build_transcript_history(questions_for_history)
+                next_question = await self._generate_core_question(
+                    category=interview.category,
+                    core_sequence=next_sequence,
+                    history=history,
+                )
+                try:
+                    await (
+                        self.supabase.table("interview_questions")
+                        .insert(
+                            {
+                                "interview_id": interview_id_str,
+                                "sequence": next_sequence,
+                                "question": next_question,
                             }
                         )
                         .execute()
@@ -455,4 +680,5 @@ class InterviewService:
             saved=saved,
             questions=questions,
             next_question_id=next_question_id,
+            evaluation=evaluation,
         )
