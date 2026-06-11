@@ -306,7 +306,6 @@ export function InterviewSession({ interview }: InterviewSessionProps) {
               !isLastStep &&
               isQuestionSubmitted(currentQuestion)
             }
-            isLastStep={!isLoading && isLastStep}
             isSaving={isSaving}
             isEvaluating={isEvaluating}
             onPrevious={handlePrevious}

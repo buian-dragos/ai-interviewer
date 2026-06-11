@@ -11,9 +11,9 @@ export const INTERVIEW_PAGE_INNER_CLASS =
 
 export const INTERVIEW_CONTENT_CLASS = "mx-auto w-full max-w-2xl";
 
-/** Fixed slot so composer position does not shift with question length. */
+/** Grows with question length up to a viewport cap, then scrolls; composer stays in its own flex slot. */
 export const INTERVIEW_QUESTION_SLOT_CLASS =
-  "mt-10 flex h-32 shrink-0 flex-col overflow-y-auto overscroll-y-contain md:mt-14 md:h-36";
+  "mt-10 flex min-h-32 max-h-[40vh] shrink-0 flex-col overflow-y-auto overscroll-y-contain md:mt-14 md:min-h-36 md:max-h-[45vh]";
 
 /** Grows between question slot and nav; composer sits lower (2:1 spacer ratio). */
 export const INTERVIEW_MIDDLE_CLASS = "flex min-h-0 flex-1 flex-col";

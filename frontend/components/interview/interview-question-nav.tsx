@@ -8,7 +8,6 @@ import { INTERVIEW_CONTENT_CLASS } from "@/lib/interview-layout";
 type InterviewQuestionNavProps = {
   canGoPrevious: boolean;
   canGoNext: boolean;
-  isLastStep: boolean;
   isSaving?: boolean;
   isEvaluating?: boolean;
   onPrevious: () => void;
@@ -18,7 +17,6 @@ type InterviewQuestionNavProps = {
 export function InterviewQuestionNav({
   canGoPrevious,
   canGoNext,
-  isLastStep,
   isSaving = false,
   isEvaluating = false,
   onPrevious,
@@ -42,20 +40,16 @@ export function InterviewQuestionNav({
         Previous
       </Button>
 
-      {!isLastStep ? (
-        <Button
-          type="button"
-          variant="outline"
-          disabled={!canGoNext || disabled}
-          onClick={onNext}
-          className="touch-manipulation"
-        >
-          Next
-          <ChevronRightIcon aria-hidden="true" data-icon="inline-end" />
-        </Button>
-      ) : (
-        <span className="w-[88px]" aria-hidden="true" />
-      )}
+      <Button
+        type="button"
+        variant="outline"
+        disabled={!canGoNext || disabled}
+        onClick={onNext}
+        className="touch-manipulation"
+      >
+        Next
+        <ChevronRightIcon aria-hidden="true" data-icon="inline-end" />
+      </Button>
     </nav>
   );
 }
