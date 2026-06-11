@@ -125,6 +125,9 @@ export function AppSidebar({ initialInterviews }: AppSidebarProps) {
                       ? `${interview.category} · In progress`
                       : `${interview.category} · ${formatInterviewDate(interview.started_at)}`;
 
+                    const isActiveInProgress = isActive && inProgress;
+                    const isActiveCompleted = isActive && !inProgress;
+
                     return (
                       <SidebarMenuItem
                         key={interview.id}
@@ -137,22 +140,49 @@ export function AppSidebar({ initialInterviews }: AppSidebarProps) {
                           tooltip={tooltip}
                           className={cn(
                             "group-data-[collapsible=icon]:justify-center",
-                            inProgress &&
-                              !isActive &&
-                              "bg-sidebar-accent/50 hover:bg-sidebar-accent/70",
+                            isActiveCompleted &&
+                              "bg-sidebar-accent ring-1 ring-inset ring-sidebar-border",
+                            isActiveInProgress &&
+                              "bg-sidebar-border/35 ring-1 ring-inset ring-sidebar-border/70",
+                            !isActive &&
+                              inProgress &&
+                              "bg-sidebar-border/20 hover:bg-sidebar-border/30",
+                            !isActive &&
+                              !inProgress &&
+                              "text-sidebar-foreground/75 hover:text-sidebar-foreground",
                           )}
                         >
-                          <HistoryIcon />
+                          <HistoryIcon
+                            className={cn(
+                              isActive && "text-sidebar-accent-foreground",
+                              !isActive &&
+                                inProgress &&
+                                "text-muted-foreground",
+                            )}
+                          />
                           <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-                            <span className="truncate font-medium">
+                            <span
+                              className={cn(
+                                "truncate font-medium",
+                                isActive && "text-sidebar-accent-foreground",
+                                !isActive &&
+                                  !inProgress &&
+                                  "text-sidebar-foreground/85",
+                              )}
+                            >
                               {interview.category}
                             </span>
                             <span
                               className={cn(
                                 "truncate text-xs",
-                                inProgress
-                                  ? "font-medium text-sidebar-primary"
-                                  : "text-muted-foreground",
+                                isActive &&
+                                  "text-sidebar-accent-foreground/80",
+                                !isActive &&
+                                  inProgress &&
+                                  "font-medium text-muted-foreground",
+                                !isActive &&
+                                  !inProgress &&
+                                  "text-muted-foreground/70",
                               )}
                             >
                               {inProgress

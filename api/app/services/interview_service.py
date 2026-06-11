@@ -154,6 +154,18 @@ class InterviewService:
             return ids[saved_index + 1]
         return None
 
+    async def _complete_interview(self, interview_id: str) -> None:
+        completed_at = datetime.now(UTC).isoformat()
+        try:
+            await (
+                self.supabase.table("interviews")
+                .update({"status": "completed", "completed_at": completed_at})
+                .eq("id", interview_id)
+                .execute()
+            )
+        except Exception as exc:
+            raise InterviewError(str(exc)) from exc
+
     async def create(
         self,
         user_id: str,
@@ -398,6 +410,11 @@ class InterviewService:
 
         questions = await self._fetch_all_questions(interview_id_str)
         next_question_id = self._next_question_id_after_submit(questions, saved)
+
+        if next_question_id is None and all(
+            question.answered_at is not None for question in questions
+        ):
+            await self._complete_interview(interview_id_str)
 
         return SubmitAnswerResponse(
             saved=saved,

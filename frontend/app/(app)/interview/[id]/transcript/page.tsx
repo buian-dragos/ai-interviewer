@@ -4,13 +4,13 @@ import { notFound, redirect } from "next/navigation";
 import { ApiError, getInterviewServer } from "@/lib/api";
 import { formatInterviewDate, isFinished } from "@/lib/interviews";
 
-type InterviewSummaryPageProps = {
+type InterviewTranscriptPageProps = {
   params: Promise<{ id: string }>;
 };
 
-export default async function InterviewSummaryPage({
+export default async function InterviewTranscriptPage({
   params,
-}: InterviewSummaryPageProps) {
+}: InterviewTranscriptPageProps) {
   const { id } = await params;
   const cookieStore = await cookies();
 
@@ -32,7 +32,7 @@ export default async function InterviewSummaryPage({
     <main className="flex flex-col gap-6 p-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">
-          Interview summary
+          Interview transcript
         </h1>
         <p className="text-sm text-muted-foreground">
           Topic: {interview.category}
@@ -40,14 +40,9 @@ export default async function InterviewSummaryPage({
         <p className="text-sm text-muted-foreground">
           Started: {formatInterviewDate(interview.started_at)}
         </p>
-        {interview.completed_at ? (
-          <p className="text-sm text-muted-foreground">
-            Completed: {formatInterviewDate(interview.completed_at)}
-          </p>
-        ) : null}
       </div>
       <p className="text-sm text-muted-foreground">
-        Scoring and feedback coming soon.
+        Transcript coming soon.
       </p>
     </main>
   );

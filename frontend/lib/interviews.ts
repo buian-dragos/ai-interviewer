@@ -97,7 +97,8 @@ export function isInterviewPathActive(
 ): boolean {
   return (
     pathname === `/interview/${interviewId}` ||
-    pathname === `/interview/${interviewId}/summary`
+    pathname === `/interview/${interviewId}/summary` ||
+    pathname === `/interview/${interviewId}/transcript`
   );
 }
 

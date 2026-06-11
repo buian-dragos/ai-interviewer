@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { InterviewAnswerComposer } from "@/components/interview/interview-answer-composer";
@@ -40,6 +41,7 @@ type InterviewSessionProps = {
 };
 
 export function InterviewSession({ interview }: InterviewSessionProps) {
+  const router = useRouter();
   const [questions, setQuestions] = useState<InterviewQuestion[]>([]);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [answer, setAnswer] = useState("");
@@ -62,7 +64,17 @@ export function InterviewSession({ interview }: InterviewSessionProps) {
   const progressValue = currentQuestion
     ? getCoreProgressValue(currentQuestion)
     : 0;
-  const interactionDisabled = isSaving || isEvaluating;
+  const displayCoreSequence = currentQuestion?.core_sequence ?? 1;
+  const displayProgressValue = currentQuestion
+    ? progressValue
+    : (displayCoreSequence / CORE_QUESTIONS_TOTAL) * 100;
+  const interactionDisabled = isSaving || isEvaluating || isLoading;
+  const isCurrentQuestionSubmitted = currentQuestion
+    ? isQuestionSubmitted(currentQuestion)
+    : false;
+  const composerDisabled = interactionDisabled || isCurrentQuestionSubmitted;
+  const showExternalComposer =
+    isLoading || !currentQuestion || !(isFollowUp && parentCoreQuestion);
 
   useEffect(() => {
     let cancelled = false;
@@ -132,7 +144,12 @@ export function InterviewSession({ interview }: InterviewSessionProps) {
 
   async function handleSubmit() {
     const trimmed = answer.trim();
-    if (!trimmed || !currentQuestion || interactionDisabled) {
+    if (
+      !trimmed ||
+      !currentQuestion ||
+      interactionDisabled ||
+      isQuestionSubmitted(currentQuestion)
+    ) {
       return;
     }
 
@@ -165,9 +182,7 @@ export function InterviewSession({ interview }: InterviewSessionProps) {
         isCoreFiveStep(savedQuestion) ||
         (isFollowUpStep(savedQuestion) && savedQuestion.core_sequence === 5)
       ) {
-        toast.success("Interview submitted.", {
-          description: "Summary and scoring will be added in a later step.",
-        });
+        router.push(`/interview/${interview.id}/summary`);
         return;
       }
 
@@ -203,36 +218,6 @@ export function InterviewSession({ interview }: InterviewSessionProps) {
     setCurrentStepIndex((index) => Math.min(index + 1, questions.length - 1));
   }
 
-  if (isLoading) {
-    return (
-      <main className={INTERVIEW_PAGE_MAIN_CLASS}>
-        <div className={`${INTERVIEW_PAGE_INNER_CLASS} gap-6`}>
-          <Skeleton className="mx-auto h-9 w-64" />
-          <Skeleton className="h-2 w-full" />
-          <Skeleton className="mx-auto mt-10 h-32 w-full max-w-2xl md:h-36" />
-          <div className={`${INTERVIEW_MIDDLE_CLASS} min-h-48`}>
-            <div className="flex-1" aria-hidden="true" />
-            <Skeleton className="mx-auto h-72 w-full max-w-2xl" />
-            <div className="flex-1" aria-hidden="true" />
-          </div>
-          <Skeleton className="h-12 w-full max-w-2xl" />
-        </div>
-      </main>
-    );
-  }
-
-  if (!currentQuestion) {
-    return (
-      <main className={INTERVIEW_PAGE_MAIN_CLASS}>
-        <div className={INTERVIEW_PAGE_INNER_CLASS}>
-          <p className="text-center text-muted-foreground">
-            No questions available for this interview.
-          </p>
-        </div>
-      </main>
-    );
-  }
-
   return (
     <main className={INTERVIEW_PAGE_MAIN_CLASS}>
       <div className={INTERVIEW_PAGE_INNER_CLASS}>
@@ -240,78 +225,94 @@ export function InterviewSession({ interview }: InterviewSessionProps) {
           <h1 className="text-center text-2xl font-bold tracking-tight text-balance md:text-3xl">
             {interview.category}
           </h1>
-          <Progress value={progressValue} className="w-full flex-col gap-2">
+          <Progress value={displayProgressValue} className="w-full flex-col gap-2">
             <ProgressLabel>
-              Question {currentQuestion.core_sequence} of {CORE_QUESTIONS_TOTAL}
+              Question {displayCoreSequence} of {CORE_QUESTIONS_TOTAL}
             </ProgressLabel>
           </Progress>
         </header>
 
-        {isFollowUp && parentCoreQuestion ? (
+        {isLoading ? (
+          <section
+            className={cn(
+              INTERVIEW_CONTENT_CLASS,
+              INTERVIEW_QUESTION_SLOT_CLASS,
+            )}
+          >
+            <Skeleton className="mx-auto h-full w-full max-w-xl" />
+          </section>
+        ) : !currentQuestion ? (
+          <p className="text-center text-muted-foreground">
+            No questions available for this interview.
+          </p>
+        ) : isFollowUp && parentCoreQuestion ? (
           <InterviewFollowUpStep
             parentQuestion={parentCoreQuestion}
             followUpQuestion={currentQuestion}
             answer={answer}
-            disabled={interactionDisabled}
+            disabled={composerDisabled}
             isLastQuestion={showSubmitInterviewLabel}
             isSaving={isSaving}
             onAnswerChange={setAnswer}
             onSubmit={() => void handleSubmit()}
           />
         ) : (
-          <>
-            <section
-              className={cn(
-                INTERVIEW_CONTENT_CLASS,
-                INTERVIEW_QUESTION_SLOT_CLASS,
-              )}
-            >
-              {isEvaluating ? (
-                <div className="flex h-full flex-col items-center justify-center gap-4">
-                  <p className="text-sm text-muted-foreground">
-                    Reviewing your answer…
-                  </p>
-                  <Skeleton className="h-4 w-48" />
-                </div>
-              ) : (
-                <p className="text-center text-xl leading-relaxed font-medium text-pretty md:text-2xl">
-                  {currentQuestion.question}
+          <section
+            className={cn(
+              INTERVIEW_CONTENT_CLASS,
+              INTERVIEW_QUESTION_SLOT_CLASS,
+            )}
+          >
+            {isEvaluating ? (
+              <div className="flex h-full flex-col items-center justify-center gap-4">
+                <p className="text-sm text-muted-foreground">
+                  Reviewing your answer…
                 </p>
-              )}
-            </section>
-
-            <div className={INTERVIEW_MIDDLE_CLASS}>
-              <div
-                className={INTERVIEW_MIDDLE_TOP_SPACER_CLASS}
-                aria-hidden="true"
-              />
-
-              <div className={INTERVIEW_COMPOSER_SLOT_CLASS}>
-                <InterviewAnswerComposer
-                  answer={answer}
-                  disabled={interactionDisabled}
-                  isLastQuestion={showSubmitInterviewLabel}
-                  isSaving={isSaving || isEvaluating}
-                  onAnswerChange={setAnswer}
-                  onSubmit={() => void handleSubmit()}
-                />
+                <Skeleton className="h-4 w-48" />
               </div>
+            ) : (
+              <p className="text-center text-xl leading-relaxed font-medium text-pretty md:text-2xl">
+                {currentQuestion.question}
+              </p>
+            )}
+          </section>
+        )}
 
-              <div
-                className={INTERVIEW_MIDDLE_BOTTOM_SPACER_CLASS}
-                aria-hidden="true"
+        {showExternalComposer ? (
+          <div className={INTERVIEW_MIDDLE_CLASS}>
+            <div
+              className={INTERVIEW_MIDDLE_TOP_SPACER_CLASS}
+              aria-hidden="true"
+            />
+
+            <div className={INTERVIEW_COMPOSER_SLOT_CLASS}>
+              <InterviewAnswerComposer
+                answer={answer}
+                disabled={composerDisabled}
+                isLastQuestion={showSubmitInterviewLabel}
+                isSaving={isSaving || isEvaluating}
+                onAnswerChange={setAnswer}
+                onSubmit={() => void handleSubmit()}
               />
             </div>
-          </>
-        )}
+
+            <div
+              className={INTERVIEW_MIDDLE_BOTTOM_SPACER_CLASS}
+              aria-hidden="true"
+            />
+          </div>
+        ) : null}
 
         <footer className={INTERVIEW_NAV_FOOTER_CLASS}>
           <InterviewQuestionNav
-            canGoPrevious={currentStepIndex > 0}
+            canGoPrevious={!isLoading && currentStepIndex > 0}
             canGoNext={
-              !isLastStep && isQuestionSubmitted(currentQuestion)
+              !isLoading &&
+              !!currentQuestion &&
+              !isLastStep &&
+              isQuestionSubmitted(currentQuestion)
             }
-            isLastStep={isLastStep}
+            isLastStep={!isLoading && isLastStep}
             isSaving={isSaving}
             isEvaluating={isEvaluating}
             onPrevious={handlePrevious}
