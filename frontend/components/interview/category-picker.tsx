@@ -43,6 +43,8 @@ export function CategoryPicker() {
     }
   }
 
+  const startingLabel = "Preparing interview…";
+
   function handleCustomStart() {
     const topic = customTopic.trim();
     if (!topic) {
@@ -54,6 +56,9 @@ export function CategoryPicker() {
 
   return (
     <div className="flex flex-col gap-14">
+      {isStarting ? (
+        <p className="text-center text-sm text-muted-foreground">{startingLabel}</p>
+      ) : null}
       <div className="mx-auto flex w-full flex-wrap justify-center gap-4">
         {INTERVIEW_CATEGORIES.map((category) => {
           const Icon = category.icon;
@@ -120,8 +125,8 @@ export function CategoryPicker() {
               onClick={handleCustomStart}
               className="h-10 shrink-0 px-5"
             >
-              Start
-              <ArrowRightIcon data-icon="inline-end" />
+              {isStarting ? startingLabel : "Start"}
+              {!isStarting ? <ArrowRightIcon data-icon="inline-end" /> : null}
             </Button>
           </div>
         </Field>

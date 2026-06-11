@@ -12,6 +12,8 @@ class Settings(BaseSettings):
 
     supabase_url: str
     supabase_publishable_key: str
+    gemini_api_key: str
+    gemini_model: str = "gemini-2.5-flash"
     cors_origins: str = "http://localhost:3000"
     cookie_secure: bool = False
 

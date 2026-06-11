@@ -1,14 +1,17 @@
 from datetime import UTC, datetime
+import logging
 from uuid import UUID
 
 from supabase import AsyncClient
 
 from app.schemas.interviews import (
-    CORE_QUESTIONS_TOTAL,
     InterviewQuestionResponse,
     InterviewResponse,
     SubmitAnswerResponse,
 )
+from app.services.gemini_service import GeminiError, format_current_stage, get_gemini_service
+
+logger = logging.getLogger(__name__)
 
 CORE_QUESTION_TEMPLATES = [
     "What experience do you have related to {category}?",
@@ -66,16 +69,42 @@ class InterviewService:
             core_sequence=self._core_sequence(row),
         )
 
-    def _build_core_questions(self, interview_id: str, category: str) -> list[dict]:
-        return [
+    def _build_core_questions(
+        self, interview_id: str, category: str, first_question: str
+    ) -> list[dict]:
+        questions = [
             {
                 "interview_id": interview_id,
-                "sequence": sequence,
-                "question": template.format(category=category),
+                "sequence": 1,
+                "question": first_question,
                 "answer_depth": "core",
             }
-            for sequence, template in enumerate(CORE_QUESTION_TEMPLATES, start=1)
         ]
+        for sequence, template in enumerate(CORE_QUESTION_TEMPLATES[1:], start=2):
+            questions.append(
+                {
+                    "interview_id": interview_id,
+                    "sequence": sequence,
+                    "question": template.format(category=category),
+                    "answer_depth": "core",
+                }
+            )
+        return questions
+
+    async def _generate_first_question(self, category: str) -> str:
+        fallback = CORE_QUESTION_TEMPLATES[0].format(category=category)
+        try:
+            return await get_gemini_service().generate_interview_turn(
+                category=category,
+                current_stage=format_current_stage("core", 1),
+                history=[],
+            )
+        except GeminiError as exc:
+            logger.warning("Gemini failed to generate Q1, using template: %s", exc.message)
+            return fallback
+        except Exception:
+            logger.exception("Unexpected error generating Q1, using template")
+            return fallback
 
     def _should_create_follow_up(self, question_row: dict) -> bool:
         """Mock: always add a follow-up after core question 1."""
@@ -196,10 +225,16 @@ class InterviewService:
         interview_row = result.data[0]
         interview_id = interview_row["id"]
 
+        first_question = await self._generate_first_question(category)
+
         try:
             await (
                 self.supabase.table("interview_questions")
-                .insert(self._build_core_questions(interview_id, category))
+                .insert(
+                    self._build_core_questions(
+                        interview_id, category, first_question
+                    )
+                )
                 .execute()
             )
         except Exception as exc:
