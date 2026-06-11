@@ -8,8 +8,9 @@ import { INTERVIEW_CONTENT_CLASS } from "@/lib/interview-layout";
 type InterviewQuestionNavProps = {
   canGoPrevious: boolean;
   canGoNext: boolean;
-  isLastQuestion: boolean;
+  isLastStep: boolean;
   isSaving?: boolean;
+  isEvaluating?: boolean;
   onPrevious: () => void;
   onNext: () => void;
 };
@@ -17,11 +18,14 @@ type InterviewQuestionNavProps = {
 export function InterviewQuestionNav({
   canGoPrevious,
   canGoNext,
-  isLastQuestion,
+  isLastStep,
   isSaving = false,
+  isEvaluating = false,
   onPrevious,
   onNext,
 }: InterviewQuestionNavProps) {
+  const disabled = isSaving || isEvaluating;
+
   return (
     <nav
       aria-label="Question navigation"
@@ -30,7 +34,7 @@ export function InterviewQuestionNav({
       <Button
         type="button"
         variant="outline"
-        disabled={!canGoPrevious || isSaving}
+        disabled={!canGoPrevious || disabled}
         onClick={onPrevious}
         className="touch-manipulation"
       >
@@ -38,11 +42,11 @@ export function InterviewQuestionNav({
         Previous
       </Button>
 
-      {!isLastQuestion ? (
+      {!isLastStep ? (
         <Button
           type="button"
           variant="outline"
-          disabled={!canGoNext || isSaving}
+          disabled={!canGoNext || disabled}
           onClick={onNext}
           className="touch-manipulation"
         >

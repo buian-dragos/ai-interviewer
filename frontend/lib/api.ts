@@ -1,4 +1,8 @@
-import type { Interview, InterviewQuestion } from "@/lib/interviews";
+import type {
+  Interview,
+  InterviewQuestion,
+  SubmitAnswerResult,
+} from "@/lib/interviews";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -107,6 +111,20 @@ export const api = {
       `/interviews/${interviewId}/questions/${questionId}`,
       {
         method: "PATCH",
+        body: JSON.stringify({ answer }),
+      },
+    );
+  },
+
+  submitInterviewAnswer(
+    interviewId: string,
+    questionId: string,
+    answer: string,
+  ) {
+    return request<SubmitAnswerResult>(
+      `/interviews/${interviewId}/questions/${questionId}/submit`,
+      {
+        method: "POST",
         body: JSON.stringify({ answer }),
       },
     );

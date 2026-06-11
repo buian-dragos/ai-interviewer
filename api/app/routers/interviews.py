@@ -9,6 +9,7 @@ from app.schemas.interviews import (
     CreateInterviewRequest,
     InterviewQuestionResponse,
     InterviewResponse,
+    SubmitAnswerResponse,
     UpdateInterviewAnswerRequest,
 )
 from app.services.interview_service import InterviewError, InterviewService
@@ -148,3 +149,39 @@ async def update_interview_answer(
         )
 
     return question
+
+
+@router.post(
+    "/{interview_id}/questions/{question_id}/submit",
+    response_model=SubmitAnswerResponse,
+)
+async def submit_interview_answer(
+    interview_id: UUID,
+    question_id: UUID,
+    body: UpdateInterviewAnswerRequest,
+    session: AuthenticatedUser = Depends(get_current_user),
+    supabase: AsyncClient = Depends(get_supabase),
+) -> SubmitAnswerResponse:
+    service = InterviewService(supabase)
+    try:
+        result = await service.submit_answer(
+            interview_id=interview_id,
+            question_id=question_id,
+            user_id=session.user.id,
+            answer=body.answer,
+            access_token=session.access_token,
+            refresh_token=session.refresh_token,
+        )
+    except InterviewError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=exc.message,
+        ) from exc
+
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Interview or question not found",
+        )
+
+    return result

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { InterviewAnswerComposer } from "@/components/interview/interview-answer-composer";
+import { InterviewFollowUpStep } from "@/components/interview/interview-follow-up-step";
 import { InterviewQuestionNav } from "@/components/interview/interview-question-nav";
 import { Progress, ProgressLabel } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -21,11 +22,18 @@ import {
   INTERVIEW_QUESTION_SLOT_CLASS,
 } from "@/lib/interview-layout";
 import {
-  findFirstUnsubmittedIndex,
+  findFirstUnsubmittedStepIndex,
+  findStepIndexById,
+  getCoreProgressValue,
+  getParentCoreQuestion,
+  isCoreFiveStep,
+  isFollowUpStep,
+  isLastTimelineStep,
   isQuestionSubmitted,
   type Interview,
   type InterviewQuestion,
 } from "@/lib/interviews";
+import { cn } from "@/lib/utils";
 
 type InterviewSessionProps = {
   interview: Interview;
@@ -33,17 +41,28 @@ type InterviewSessionProps = {
 
 export function InterviewSession({ interview }: InterviewSessionProps) {
   const [questions, setQuestions] = useState<InterviewQuestion[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [answer, setAnswer] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isEvaluating, setIsEvaluating] = useState(false);
 
-  const currentQuestion = questions[currentIndex];
-  const isLastQuestion = currentIndex === CORE_QUESTIONS_TOTAL - 1;
-  const progressValue =
-    questions.length > 0
-      ? ((currentIndex + 1) / CORE_QUESTIONS_TOTAL) * 100
-      : 0;
+  const currentQuestion = questions[currentStepIndex];
+  const isFollowUp = currentQuestion ? isFollowUpStep(currentQuestion) : false;
+  const parentCoreQuestion =
+    currentQuestion && isFollowUp
+      ? getParentCoreQuestion(questions, currentQuestion)
+      : undefined;
+  const isLastStep = currentQuestion
+    ? isLastTimelineStep(questions, currentStepIndex)
+    : false;
+  const showSubmitInterviewLabel = currentQuestion
+    ? isCoreFiveStep(currentQuestion)
+    : false;
+  const progressValue = currentQuestion
+    ? getCoreProgressValue(currentQuestion)
+    : 0;
+  const interactionDisabled = isSaving || isEvaluating;
 
   useEffect(() => {
     let cancelled = false;
@@ -64,8 +83,8 @@ export function InterviewSession({ interview }: InterviewSessionProps) {
         }
 
         setQuestions(data);
-        const resumeIndex = findFirstUnsubmittedIndex(data);
-        setCurrentIndex(resumeIndex);
+        const resumeIndex = findFirstUnsubmittedStepIndex(data);
+        setCurrentStepIndex(resumeIndex);
         setAnswer(data[resumeIndex]?.answer ?? "");
       })
       .catch((error) => {
@@ -96,69 +115,92 @@ export function InterviewSession({ interview }: InterviewSessionProps) {
     }
   }, [currentQuestion]);
 
-  const saveCurrentAnswer = useCallback(async (): Promise<boolean> => {
+  const goToStep = useCallback(
+    (questionId: string | null, updatedQuestions: InterviewQuestion[]) => {
+      if (!questionId) {
+        return;
+      }
+
+      const nextIndex = findStepIndexById(updatedQuestions, questionId);
+      if (nextIndex >= 0) {
+        setCurrentStepIndex(nextIndex);
+        setAnswer(updatedQuestions[nextIndex]?.answer ?? "");
+      }
+    },
+    [],
+  );
+
+  async function handleSubmit() {
     const trimmed = answer.trim();
-    if (!trimmed || !currentQuestion) {
-      return false;
+    if (!trimmed || !currentQuestion || interactionDisabled) {
+      return;
     }
 
-    setIsSaving(true);
+    const isCore = !isFollowUpStep(currentQuestion);
+    if (isCore) {
+      setIsEvaluating(true);
+    } else {
+      setIsSaving(true);
+    }
+
     try {
-      const updated = await api.updateInterviewAnswer(
+      const result = await api.submitInterviewAnswer(
         interview.id,
         currentQuestion.id,
         trimmed,
       );
 
-      setQuestions((previous) =>
-        previous.map((question) =>
-          question.id === updated.id ? updated : question,
-        ),
-      );
-      setAnswer(updated.answer ?? trimmed);
-      return true;
+      setQuestions(result.questions);
+
+      const savedIndex = findStepIndexById(result.questions, result.saved.id);
+      const savedQuestion =
+        savedIndex >= 0 ? result.questions[savedIndex] : result.saved;
+
+      if (result.next_question_id) {
+        goToStep(result.next_question_id, result.questions);
+        return;
+      }
+
+      if (
+        isCoreFiveStep(savedQuestion) ||
+        (isFollowUpStep(savedQuestion) && savedQuestion.core_sequence === 5)
+      ) {
+        toast.success("Interview submitted.", {
+          description: "Summary and scoring will be added in a later step.",
+        });
+        return;
+      }
+
+      if (isCore && savedIndex >= 0) {
+        setCurrentStepIndex(savedIndex);
+        setAnswer(result.saved.answer ?? trimmed);
+      }
     } catch (error) {
       const message =
         error instanceof ApiError
           ? error.message
           : "Could not save your answer.";
       toast.error(message);
-      return false;
     } finally {
       setIsSaving(false);
+      setIsEvaluating(false);
     }
-  }, [answer, currentQuestion, interview.id]);
-
-  async function handleSubmit() {
-    const saved = await saveCurrentAnswer();
-    if (!saved) {
-      return;
-    }
-
-    if (isLastQuestion) {
-      toast.success("Interview submitted.", {
-        description: "Summary and scoring will be added in a later step.",
-      });
-      return;
-    }
-
-    setCurrentIndex((index) => Math.min(index + 1, questions.length - 1));
   }
 
   function handlePrevious() {
-    if (currentIndex === 0 || isSaving) {
+    if (currentStepIndex === 0 || interactionDisabled) {
       return;
     }
 
-    setCurrentIndex((index) => index - 1);
+    setCurrentStepIndex((index) => index - 1);
   }
 
   function handleNext() {
-    if (isLastQuestion || isSaving) {
+    if (isLastStep || interactionDisabled || !currentQuestion) {
       return;
     }
 
-    setCurrentIndex((index) => Math.min(index + 1, questions.length - 1));
+    setCurrentStepIndex((index) => Math.min(index + 1, questions.length - 1));
   }
 
   if (isLoading) {
@@ -200,44 +242,78 @@ export function InterviewSession({ interview }: InterviewSessionProps) {
           </h1>
           <Progress value={progressValue} className="w-full flex-col gap-2">
             <ProgressLabel>
-              Question {currentIndex + 1} of {CORE_QUESTIONS_TOTAL}
+              Question {currentQuestion.core_sequence} of {CORE_QUESTIONS_TOTAL}
             </ProgressLabel>
           </Progress>
         </header>
 
-        <section
-          className={`${INTERVIEW_CONTENT_CLASS} ${INTERVIEW_QUESTION_SLOT_CLASS}`}
-        >
-          <p className="text-center text-xl leading-relaxed font-medium text-pretty md:text-2xl">
-            {currentQuestion.question}
-          </p>
-        </section>
+        {isFollowUp && parentCoreQuestion ? (
+          <InterviewFollowUpStep
+            parentQuestion={parentCoreQuestion}
+            followUpQuestion={currentQuestion}
+            answer={answer}
+            disabled={interactionDisabled}
+            isLastQuestion={showSubmitInterviewLabel}
+            isSaving={isSaving}
+            onAnswerChange={setAnswer}
+            onSubmit={() => void handleSubmit()}
+          />
+        ) : (
+          <>
+            <section
+              className={cn(
+                INTERVIEW_CONTENT_CLASS,
+                INTERVIEW_QUESTION_SLOT_CLASS,
+              )}
+            >
+              {isEvaluating ? (
+                <div className="flex h-full flex-col items-center justify-center gap-4">
+                  <p className="text-sm text-muted-foreground">
+                    Reviewing your answer…
+                  </p>
+                  <Skeleton className="h-4 w-48" />
+                </div>
+              ) : (
+                <p className="text-center text-xl leading-relaxed font-medium text-pretty md:text-2xl">
+                  {currentQuestion.question}
+                </p>
+              )}
+            </section>
 
-        <div className={INTERVIEW_MIDDLE_CLASS}>
-          <div className={INTERVIEW_MIDDLE_TOP_SPACER_CLASS} aria-hidden="true" />
+            <div className={INTERVIEW_MIDDLE_CLASS}>
+              <div
+                className={INTERVIEW_MIDDLE_TOP_SPACER_CLASS}
+                aria-hidden="true"
+              />
 
-          <div className={`${INTERVIEW_CONTENT_CLASS} ${INTERVIEW_COMPOSER_SLOT_CLASS}`}>
-            <InterviewAnswerComposer
-              answer={answer}
-              disabled={isSaving}
-              isLastQuestion={isLastQuestion}
-              isSaving={isSaving}
-              onAnswerChange={setAnswer}
-              onSubmit={() => void handleSubmit()}
-            />
-          </div>
+              <div className={INTERVIEW_COMPOSER_SLOT_CLASS}>
+                <InterviewAnswerComposer
+                  answer={answer}
+                  disabled={interactionDisabled}
+                  isLastQuestion={showSubmitInterviewLabel}
+                  isSaving={isSaving || isEvaluating}
+                  onAnswerChange={setAnswer}
+                  onSubmit={() => void handleSubmit()}
+                />
+              </div>
 
-          <div className={INTERVIEW_MIDDLE_BOTTOM_SPACER_CLASS} aria-hidden="true" />
-        </div>
+              <div
+                className={INTERVIEW_MIDDLE_BOTTOM_SPACER_CLASS}
+                aria-hidden="true"
+              />
+            </div>
+          </>
+        )}
 
         <footer className={INTERVIEW_NAV_FOOTER_CLASS}>
           <InterviewQuestionNav
-            canGoPrevious={currentIndex > 0}
+            canGoPrevious={currentStepIndex > 0}
             canGoNext={
-              !isLastQuestion && isQuestionSubmitted(currentQuestion)
+              !isLastStep && isQuestionSubmitted(currentQuestion)
             }
-            isLastQuestion={isLastQuestion}
+            isLastStep={isLastStep}
             isSaving={isSaving}
+            isEvaluating={isEvaluating}
             onPrevious={handlePrevious}
             onNext={handleNext}
           />
