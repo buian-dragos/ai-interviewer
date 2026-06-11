@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { AppSidebar } from "@/components/app-sidebar";
 import { MobileSidebarTrigger } from "@/components/mobile-sidebar-trigger";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { getMeServer, listInterviewsServer } from "@/lib/api";
+import { listInterviewsServer } from "@/lib/api";
 
 export default async function AppLayout({
   children,
@@ -12,15 +12,7 @@ export default async function AppLayout({
 }) {
   const cookieStore = await cookies();
   const cookieList = cookieStore.getAll();
-  let userEmail: string | null = null;
   let interviews: Awaited<ReturnType<typeof listInterviewsServer>> = [];
-
-  try {
-    const user = await getMeServer(cookieList);
-    userEmail = user.email;
-  } catch {
-    userEmail = null;
-  }
 
   try {
     interviews = await listInterviewsServer(cookieList);
@@ -30,7 +22,7 @@ export default async function AppLayout({
 
   return (
     <SidebarProvider>
-      <AppSidebar initialInterviews={interviews} userEmail={userEmail} />
+      <AppSidebar initialInterviews={interviews} />
       <SidebarInset>
         <MobileSidebarTrigger />
         {children}

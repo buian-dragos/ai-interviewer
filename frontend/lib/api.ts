@@ -1,4 +1,4 @@
-import type { Interview } from "@/lib/interviews";
+import type { Interview, InterviewQuestion } from "@/lib/interviews";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -92,6 +92,24 @@ export const api = {
 
   getInterview(id: string) {
     return request<Interview>(`/interviews/${id}`);
+  },
+
+  listInterviewQuestions(interviewId: string) {
+    return request<InterviewQuestion[]>(`/interviews/${interviewId}/questions`);
+  },
+
+  updateInterviewAnswer(
+    interviewId: string,
+    questionId: string,
+    answer: string,
+  ) {
+    return request<InterviewQuestion>(
+      `/interviews/${interviewId}/questions/${questionId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ answer }),
+      },
+    );
   },
 };
 

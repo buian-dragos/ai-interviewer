@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 
+import { InterviewSession } from "@/components/interview/interview-session";
 import { ApiError, getInterviewServer } from "@/lib/api";
 import { isFinished } from "@/lib/interviews";
 
@@ -28,16 +29,5 @@ export default async function InterviewSessionPage({
     redirect(`/interview/${id}/summary`);
   }
 
-  return (
-    <main className="flex flex-1 flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Interview session
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Topic: {interview.category}
-        </p>
-      </div>
-    </main>
-  );
+  return <InterviewSession interview={interview} />;
 }

@@ -5,7 +5,12 @@ from supabase import AsyncClient
 
 from app.core.supabase import get_supabase
 from app.dependencies.auth import AuthenticatedUser, get_current_user
-from app.schemas.interviews import CreateInterviewRequest, InterviewResponse
+from app.schemas.interviews import (
+    CreateInterviewRequest,
+    InterviewQuestionResponse,
+    InterviewResponse,
+    UpdateInterviewAnswerRequest,
+)
 from app.services.interview_service import InterviewError, InterviewService
 
 router = APIRouter(prefix="/interviews", tags=["interviews"])
@@ -78,3 +83,68 @@ async def get_interview(
         )
 
     return interview
+
+
+@router.get("/{interview_id}/questions", response_model=list[InterviewQuestionResponse])
+async def list_interview_questions(
+    interview_id: UUID,
+    session: AuthenticatedUser = Depends(get_current_user),
+    supabase: AsyncClient = Depends(get_supabase),
+) -> list[InterviewQuestionResponse]:
+    service = InterviewService(supabase)
+    try:
+        questions = await service.list_questions(
+            interview_id=interview_id,
+            user_id=session.user.id,
+            access_token=session.access_token,
+            refresh_token=session.refresh_token,
+        )
+    except InterviewError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=exc.message,
+        ) from exc
+
+    if questions is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Interview not found",
+        )
+
+    return questions
+
+
+@router.patch(
+    "/{interview_id}/questions/{question_id}",
+    response_model=InterviewQuestionResponse,
+)
+async def update_interview_answer(
+    interview_id: UUID,
+    question_id: UUID,
+    body: UpdateInterviewAnswerRequest,
+    session: AuthenticatedUser = Depends(get_current_user),
+    supabase: AsyncClient = Depends(get_supabase),
+) -> InterviewQuestionResponse:
+    service = InterviewService(supabase)
+    try:
+        question = await service.update_answer(
+            interview_id=interview_id,
+            question_id=question_id,
+            user_id=session.user.id,
+            answer=body.answer,
+            access_token=session.access_token,
+            refresh_token=session.refresh_token,
+        )
+    except InterviewError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=exc.message,
+        ) from exc
+
+    if question is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Interview or question not found",
+        )
+
+    return question

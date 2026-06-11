@@ -16,7 +16,7 @@ export default async function HomePage() {
   const user = await getMeServer(cookieStore.getAll());
 
   return (
-    <main className="flex flex-1 flex-col items-center p-6">
+    <main className="flex flex-col items-center p-6">
       <div className="flex w-full max-w-4xl flex-col">
       <div className="flex items-center justify-between gap-4">
         <div>

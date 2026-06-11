@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { HistoryIcon, MessageSquareIcon, UserIcon } from "lucide-react";
+import { HistoryIcon, MessageSquareIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import {
@@ -16,7 +16,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -39,17 +38,12 @@ import { cn } from "@/lib/utils";
 
 type AppSidebarProps = {
   initialInterviews: InterviewSummary[];
-  userEmail: string | null;
 };
 
-export function AppSidebar({ initialInterviews, userEmail }: AppSidebarProps) {
+export function AppSidebar({ initialInterviews }: AppSidebarProps) {
   const pathname = usePathname();
   const [interviews, setInterviews] =
     useState<InterviewSummary[]>(initialInterviews);
-
-  useEffect(() => {
-    setInterviews(initialInterviews);
-  }, [initialInterviews]);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,7 +57,7 @@ export function AppSidebar({ initialInterviews, userEmail }: AppSidebarProps) {
     return () => {
       cancelled = true;
     };
-  }, [pathname]);
+  }, [pathname, initialInterviews]);
 
   return (
     <Sidebar collapsible="icon">
@@ -118,7 +112,7 @@ export function AppSidebar({ initialInterviews, userEmail }: AppSidebarProps) {
                 </SidebarMenu>
               </>
             ) : (
-              <ScrollArea className="h-[calc(100vh-10rem)] group-data-[collapsible=icon]:h-auto">
+              <ScrollArea className="min-h-0 flex-1 group-data-[collapsible=icon]:h-auto">
                 <SidebarMenu className="flex flex-col gap-2 group-data-[collapsible=icon]:items-center">
                   {interviews.map((interview) => {
                     const href = getInterviewHref(interview);
@@ -176,23 +170,6 @@ export function AppSidebar({ initialInterviews, userEmail }: AppSidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-
-      <SidebarFooter>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              size="lg"
-              tooltip={userEmail ?? "Signed in"}
-              className="pointer-events-none"
-            >
-              <UserIcon />
-              <span className="truncate text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
-                {userEmail ?? "Signed in"}
-              </span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
 
       <SidebarRail />
     </Sidebar>

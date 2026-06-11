@@ -10,6 +10,25 @@ export type Interview = {
 
 export type InterviewSummary = Interview;
 
+export type InterviewQuestion = {
+  id: string;
+  sequence: number;
+  question: string;
+  answer: string | null;
+  answered_at: string | null;
+};
+
+export function isQuestionSubmitted(question: InterviewQuestion): boolean {
+  return question.answered_at != null;
+}
+
+export function findFirstUnsubmittedIndex(
+  questions: InterviewQuestion[],
+): number {
+  const index = questions.findIndex((question) => !isQuestionSubmitted(question));
+  return index === -1 ? 0 : index;
+}
+
 export function isFinished(interview: Interview): boolean {
   return interview.status === "completed";
 }
