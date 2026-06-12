@@ -50,6 +50,7 @@ class InterviewQuestionResponse(BaseModel):
     question: str
     answer: str | None = None
     answered_at: datetime | None = None
+    created_at: datetime
     answer_depth: AnswerDepth | None = None
     answered_question: bool | None = None
     follows_question_id: UUID | None = None

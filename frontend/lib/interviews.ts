@@ -67,9 +67,14 @@ export type InterviewQuestion = {
   question: string;
   answer: string | null;
   answered_at: string | null;
+  created_at: string;
   answer_depth: AnswerDepth | null;
+  answered_question: boolean | null;
   follows_question_id: string | null;
   core_sequence: number;
+  sentiment_label: SentimentLabel | null;
+  sentiment_score: number | null;
+  keywords: KeywordMatch[] | null;
 };
 
 export type SubmitAnswerResult = {
@@ -161,4 +166,84 @@ export function formatInterviewDate(iso: string): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+export function formatAnswerDuration(
+  createdAt: string,
+  answeredAt: string,
+): string {
+  const elapsedMs = Math.max(
+    0,
+    new Date(answeredAt).getTime() - new Date(createdAt).getTime(),
+  );
+  const totalSeconds = Math.round(elapsedMs / 1000);
+
+  if (totalSeconds < 60) {
+    return `${totalSeconds}s`;
+  }
+
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (minutes < 60) {
+    return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+}
+
+const DEPTH_RANK: Record<AnswerDepth, number> = {
+  shallow: 0,
+  adequate: 1,
+  deep: 2,
+};
+
+export function questionHasFollowUp(
+  questions: InterviewQuestion[],
+  questionId: string,
+): boolean {
+  return questions.some(
+    (question) => question.follows_question_id === questionId,
+  );
+}
+
+export function hasImprovedFromCoreQuestion(
+  coreQuestion: InterviewQuestion,
+  followUpQuestion: InterviewQuestion,
+): boolean | null {
+  const depthImproved =
+    coreQuestion.answer_depth != null &&
+    followUpQuestion.answer_depth != null &&
+    DEPTH_RANK[followUpQuestion.answer_depth] >
+      DEPTH_RANK[coreQuestion.answer_depth];
+
+  const addressedImproved =
+    coreQuestion.answered_question === false &&
+    followUpQuestion.answered_question === true;
+
+  if (
+    coreQuestion.answer_depth == null &&
+    coreQuestion.answered_question == null
+  ) {
+    return null;
+  }
+
+  if (
+    followUpQuestion.answer_depth == null &&
+    followUpQuestion.answered_question == null
+  ) {
+    return null;
+  }
+
+  return depthImproved || addressedImproved;
+}
+
+export function formatQuestionLabel(question: InterviewQuestion): string {
+  if (question.follows_question_id != null) {
+    return `Q${question.core_sequence} follow up`;
+  }
+
+  return `Q${question.core_sequence}`;
 }

@@ -100,6 +100,7 @@ class InterviewService:
             question=row["question"],
             answer=row.get("answer"),
             answered_at=row.get("answered_at"),
+            created_at=row["created_at"],
             answer_depth=row.get("answer_depth"),
             answered_question=row.get("answered_question"),
             follows_question_id=row.get("follows_question_id"),
@@ -375,7 +376,7 @@ class InterviewService:
         result = (
             await self.supabase.table("interview_questions")
             .select(
-                "id, sequence, question, answer, answered_at, "
+                "id, sequence, question, answer, answered_at, created_at, "
                 "answer_depth, answered_question, follows_question_id, "
                 "sentiment_label, sentiment_score, keywords"
             )

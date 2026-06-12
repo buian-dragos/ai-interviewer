@@ -1,45 +1,29 @@
 "use client";
 
 import { Fragment, useEffect, useState, type ReactNode } from "react";
-import Link from "next/link";
 
+import {
+  InterviewResultsHeader,
+  InterviewResultsPageShell,
+  InterviewResultsSection,
+  InterviewResultsSectionDivider,
+  sectionTitleClassName,
+} from "@/components/interview/interview-results-layout";
 import { SentimentOverview } from "@/components/interview/sentiment-overview";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
-import {
-  formatInterviewDate,
-  type InterviewSummaryResponse,
-} from "@/lib/interviews";
+import type { InterviewSummaryResponse } from "@/lib/interviews";
 
 type InterviewSummaryViewProps = {
   interviewId: string;
   initialData: InterviewSummaryResponse;
 };
 
-const outerPageClassName = "flex flex-1 flex-col items-center p-6";
-const innerPageClassName = "flex w-full max-w-4xl flex-col";
-const sectionTitleClassName =
-  "text-xl font-semibold tracking-tight text-balance text-pretty md:text-2xl";
 const themeTitleClassName =
   "text-lg font-semibold tracking-tight text-pretty md:text-xl";
-const sectionDescriptionClassName =
-  "text-base text-muted-foreground md:text-lg";
-
-function SummaryPageShell({ children }: { children: ReactNode }) {
-  return (
-    <div className={outerPageClassName}>
-      <div className={innerPageClassName}>{children}</div>
-    </div>
-  );
-}
-
-function SectionDivider() {
-  return <Separator className="my-10" />;
-}
 
 function InsightColumn({
   title,
@@ -106,28 +90,6 @@ function InsightsRow({
   );
 }
 
-function SummarySection({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: string;
-  children: ReactNode;
-}) {
-  return (
-    <section className="space-y-5">
-      <div className="space-y-2">
-        <h2 className={sectionTitleClassName}>{title}</h2>
-        {description ? (
-          <p className={sectionDescriptionClassName}>{description}</p>
-        ) : null}
-      </div>
-      {children}
-    </section>
-  );
-}
-
 function SummaryPendingSkeleton() {
   return (
     <div className="space-y-10" aria-hidden="true">
@@ -180,9 +142,14 @@ export function InterviewSummaryView({
 
   if (summary.status === "pending") {
     return (
-      <SummaryPageShell>
-        <SummaryHeader interview={interview} />
-        <SectionDivider />
+      <InterviewResultsPageShell>
+      <InterviewResultsHeader
+        interview={interview}
+        title="Interview Summary"
+        actionLabel="View Transcript"
+        actionHref={`/interview/${interview.id}/transcript`}
+      />
+        <InterviewResultsSectionDivider />
         <p
           className="text-base text-muted-foreground"
           role="status"
@@ -191,23 +158,28 @@ export function InterviewSummaryView({
           Generating your interview summary…
         </p>
         <SummaryPendingSkeleton />
-      </SummaryPageShell>
+      </InterviewResultsPageShell>
     );
   }
 
   if (summary.status === "failed") {
     return (
-      <SummaryPageShell>
-        <SummaryHeader interview={interview} />
-        <SectionDivider />
-        <SummarySection title="Summary Unavailable">
+      <InterviewResultsPageShell>
+      <InterviewResultsHeader
+        interview={interview}
+        title="Interview Summary"
+        actionLabel="View Transcript"
+        actionHref={`/interview/${interview.id}/transcript`}
+      />
+        <InterviewResultsSectionDivider />
+        <InterviewResultsSection title="Summary Unavailable">
           <p className="text-base leading-relaxed text-muted-foreground">
             {summary.error ??
               "Something went wrong while generating your summary."}{" "}
             Refresh the page to try again.
           </p>
-        </SummarySection>
-      </SummaryPageShell>
+        </InterviewResultsSection>
+      </InterviewResultsPageShell>
     );
   }
 
@@ -222,17 +194,17 @@ export function InterviewSummaryView({
 
   if (summary.summary) {
     sections.push(
-      <SummarySection key="overview" title="Overview">
+      <InterviewResultsSection key="overview" title="Overview">
         <p className="text-base leading-relaxed break-words md:text-lg">
           {summary.summary}
         </p>
-      </SummarySection>,
+      </InterviewResultsSection>,
     );
   }
 
   if (themes.length > 0) {
     sections.push(
-      <SummarySection
+      <InterviewResultsSection
         key="themes"
         title="Themes"
         description="Patterns that emerged across your answers"
@@ -249,7 +221,7 @@ export function InterviewSummaryView({
             </Card>
           ))}
         </div>
-      </SummarySection>,
+      </InterviewResultsSection>,
     );
   }
 
@@ -258,7 +230,7 @@ export function InterviewSummaryView({
     summary.overall_sentiment_score != null
   ) {
     sections.push(
-      <SummarySection
+      <InterviewResultsSection
         key="sentiment"
         title="Overall Sentiment"
         description="Tone detected across your answers"
@@ -269,7 +241,7 @@ export function InterviewSummaryView({
           answersScored={summary.answers_scored ?? 0}
           answerSentiments={summary.answer_sentiments ?? []}
         />
-      </SummarySection>,
+      </InterviewResultsSection>,
     );
   }
 
@@ -290,7 +262,7 @@ export function InterviewSummaryView({
 
   if (topKeywords.length > 0) {
     sections.push(
-      <SummarySection
+      <InterviewResultsSection
         key="keywords"
         title="Top Keywords"
         description="Most frequent terms extracted from your answers"
@@ -326,61 +298,31 @@ export function InterviewSummaryView({
             </details>
           ) : null}
         </div>
-      </SummarySection>,
+      </InterviewResultsSection>,
     );
   }
 
   return (
-    <SummaryPageShell>
-      <SummaryHeader interview={interview} />
+    <InterviewResultsPageShell>
+      <InterviewResultsHeader
+        interview={interview}
+        title="Interview Summary"
+        actionLabel="View Transcript"
+        actionHref={`/interview/${interview.id}/transcript`}
+      />
       {sections.length > 0 ? (
         <>
-          <SectionDivider />
+          <InterviewResultsSectionDivider />
           <div className="space-y-10">
             {sections.map((section, index) => (
               <div key={index}>
                 {section}
-                {index < sections.length - 1 ? <SectionDivider /> : null}
+                {index < sections.length - 1 ? <InterviewResultsSectionDivider /> : null}
               </div>
             ))}
           </div>
         </>
       ) : null}
-    </SummaryPageShell>
-  );
-}
-
-function SummaryHeader({
-  interview,
-}: {
-  interview: InterviewSummaryResponse["interview"];
-}) {
-  return (
-    <header className="flex items-start justify-between gap-4">
-      <div className="min-w-0 space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight text-balance md:text-4xl">
-          Interview Summary
-        </h1>
-        <p className="text-base text-muted-foreground">
-          Topic: {interview.category}
-        </p>
-        <p className="text-base text-muted-foreground">
-          Started: {formatInterviewDate(interview.started_at)}
-        </p>
-        {interview.completed_at ? (
-          <p className="text-base text-muted-foreground">
-            Completed: {formatInterviewDate(interview.completed_at)}
-          </p>
-        ) : null}
-      </div>
-      <Button
-        variant="outline"
-        className="shrink-0"
-        nativeButton={false}
-        render={<Link href={`/interview/${interview.id}/transcript`} />}
-      >
-        View Transcript
-      </Button>
-    </header>
+    </InterviewResultsPageShell>
   );
 }

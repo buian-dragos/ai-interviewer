@@ -1,8 +1,13 @@
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 
-import { ApiError, getInterviewServer } from "@/lib/api";
-import { formatInterviewDate, isFinished } from "@/lib/interviews";
+import { InterviewTranscriptView } from "@/components/interview/interview-transcript-view";
+import {
+  ApiError,
+  getInterviewServer,
+  listInterviewQuestionsServer,
+} from "@/lib/api";
+import { isFinished } from "@/lib/interviews";
 
 type InterviewTranscriptPageProps = {
   params: Promise<{ id: string }>;
@@ -13,10 +18,11 @@ export default async function InterviewTranscriptPage({
 }: InterviewTranscriptPageProps) {
   const { id } = await params;
   const cookieStore = await cookies();
+  const cookieList = cookieStore.getAll();
 
   let interview;
   try {
-    interview = await getInterviewServer(cookieStore.getAll(), id);
+    interview = await getInterviewServer(cookieList, id);
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
       notFound();
@@ -28,22 +34,15 @@ export default async function InterviewTranscriptPage({
     redirect(`/interview/${id}`);
   }
 
-  return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Interview transcript
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Topic: {interview.category}
-        </p>
-        <p className="text-sm text-muted-foreground">
-          Started: {formatInterviewDate(interview.started_at)}
-        </p>
-      </div>
-      <p className="text-sm text-muted-foreground">
-        Transcript coming soon.
-      </p>
-    </div>
-  );
+  let questions;
+  try {
+    questions = await listInterviewQuestionsServer(cookieList, id);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      notFound();
+    }
+    throw error;
+  }
+
+  return <InterviewTranscriptView interview={interview} questions={questions} />;
 }

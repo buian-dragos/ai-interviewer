@@ -203,3 +203,13 @@ export async function getInterviewSummaryServer(
     cookieList,
   );
 }
+
+export async function listInterviewQuestionsServer(
+  cookieList: Array<{ name: string; value: string }>,
+  interviewId: string,
+): Promise<InterviewQuestion[]> {
+  return requestServer<InterviewQuestion[]>(
+    `/interviews/${interviewId}/questions`,
+    cookieList,
+  );
+}
