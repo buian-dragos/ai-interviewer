@@ -11,13 +11,13 @@ from app.schemas.interviews import (
     SubmitAnswerResponse,
 )
 from app.services.answer_evaluation_service import evaluate_answer
-from app.services.gemini_service import (
-    GeminiError,
+from app.services.groq_service import (
+    LLMError,
     CORE_QUESTION_USER_CONTENT,
     FOLLOW_UP_USER_CONTENT,
     OPENING_USER_CONTENT,
     format_current_stage,
-    get_gemini_service,
+    get_llm_service,
 )
 
 logger = logging.getLogger(__name__)
@@ -94,14 +94,14 @@ class InterviewService:
     async def _generate_first_question(self, category: str) -> str:
         fallback = CORE_QUESTION_TEMPLATES[0].format(category=category)
         try:
-            return await get_gemini_service().generate_interview_turn(
+            return await get_llm_service().generate_interview_turn(
                 category=category,
                 current_stage=format_current_stage(is_follow_up=False, core_sequence=1),
                 history=[],
                 user_content=OPENING_USER_CONTENT,
             )
-        except GeminiError as exc:
-            logger.warning("Gemini failed to generate Q1, using template: %s", exc.message)
+        except LLMError as exc:
+            logger.warning("LLM failed to generate Q1, using template: %s", exc.message)
             return fallback
         except Exception:
             logger.exception("Unexpected error generating Q1, using template")
@@ -154,7 +154,7 @@ class InterviewService:
             category=category
         )
         try:
-            return await get_gemini_service().generate_interview_turn(
+            return await get_llm_service().generate_interview_turn(
                 category=category,
                 current_stage=format_current_stage(
                     is_follow_up=False, core_sequence=core_sequence
@@ -162,9 +162,9 @@ class InterviewService:
                 history=history,
                 user_content=CORE_QUESTION_USER_CONTENT,
             )
-        except GeminiError as exc:
+        except LLMError as exc:
             logger.warning(
-                "Gemini failed to generate core Q%s, using template: %s",
+                "LLM failed to generate core Q%s, using template: %s",
                 core_sequence,
                 exc.message,
             )
@@ -183,7 +183,7 @@ class InterviewService:
         history: list[tuple[str, str]],
     ) -> str:
         try:
-            return await get_gemini_service().generate_interview_turn(
+            return await get_llm_service().generate_interview_turn(
                 category=category,
                 current_stage=format_current_stage(
                     is_follow_up=True, core_sequence=core_sequence
@@ -191,9 +191,9 @@ class InterviewService:
                 history=history,
                 user_content=FOLLOW_UP_USER_CONTENT,
             )
-        except GeminiError as exc:
+        except LLMError as exc:
             logger.warning(
-                "Gemini failed to generate follow-up, using template: %s",
+                "LLM failed to generate follow-up, using template: %s",
                 exc.message,
             )
             return FOLLOW_UP_TEMPLATE

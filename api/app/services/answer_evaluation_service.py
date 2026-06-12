@@ -2,9 +2,9 @@ import asyncio
 import logging
 
 from app.schemas.interviews import AnswerEvaluation
-from app.services.gemini_service import (
+from app.services.groq_service import (
     default_answer_depth_result,
-    get_gemini_service,
+    get_llm_service,
 )
 from app.services.nlp_service import extract_keywords, score_sentiment
 
@@ -21,7 +21,7 @@ async def evaluate_answer(
 ) -> AnswerEvaluation:
     sentiment_task = asyncio.to_thread(score_sentiment, answer)
     keywords_task = asyncio.to_thread(extract_keywords, answer)
-    depth_task = get_gemini_service().evaluate_answer_depth(
+    depth_task = get_llm_service().evaluate_answer_depth(
         question=question,
         answer=answer,
         category=category,

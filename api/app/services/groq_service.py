@@ -3,8 +3,7 @@ import json
 import logging
 from pathlib import Path
 
-from google import genai
-from google.genai import types
+from groq import Groq
 from pydantic import BaseModel, ValidationError
 
 from app.core.config import get_settings
@@ -52,7 +51,7 @@ def format_current_stage(is_follow_up: bool, core_sequence: int) -> str:
     return f"Core Question {core_sequence}"
 
 
-class GeminiError(Exception):
+class LLMError(Exception):
     def __init__(self, message: str) -> None:
         self.message = message
         super().__init__(message)
@@ -72,9 +71,10 @@ def format_evaluation_exchange(
             "and their follow-up answer together.\n\n"
             "# Follow-up rules\n"
             "- Combine insight from both answers. Detail split across turns still counts.\n"
-            "- Be generous: if the two answers together cover the topic reasonably, prefer **adequate** or **deep**.\n"
-            "- Upgrade depth when the follow-up adds any useful specificity missing from the first answer.\n"
-            "- Keep depth **shallow** only if both answers remain off-topic or give no usable information.\n"
+            "- Be generous when the combined answers substantively cover the topic; prefer **adequate** or **deep**.\n"
+            "- A thin initial answer can still have been **answered_question: true**; judge slot depth from both answers together.\n"
+            "- Upgrade depth when the follow-up adds specificity, examples, or explanation missing from the first answer.\n"
+            "- Keep slot depth **shallow** only if both answers together remain too thin, off-topic, or non-responsive.\n"
             "- **answered_question:** true if the **original core question** was addressed at least partially "
             "across both answers. Prefer true when in doubt.\n\n"
             "<original_question>\n"
@@ -101,13 +101,13 @@ def format_evaluation_exchange(
     )
 
 
-class GeminiService:
+class GroqService:
     def __init__(self) -> None:
         settings = get_settings()
-        if not settings.gemini_api_key:
-            raise GeminiError("GEMINI_API_KEY is not configured")
-        self._client = genai.Client(api_key=settings.gemini_api_key)
-        self._model = settings.gemini_model
+        if not settings.groq_api_key:
+            raise LLMError("GROQ_API_KEY is not configured")
+        self._client = Groq(api_key=settings.groq_api_key)
+        self._model = settings.groq_model
 
     def _format_history(self, history: list[tuple[Role, str]]) -> str:
         if not history:
@@ -149,18 +149,18 @@ class GeminiService:
                 OPENING_USER_CONTENT if not history else FOLLOW_UP_USER_CONTENT
             )
 
-        response = self._client.models.generate_content(
+        completion = self._client.chat.completions.create(
             model=self._model,
-            contents=user_content,
-            config=types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                temperature=0.7,
-            ),
+            messages=[
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": user_content},
+            ],
+            temperature=0.7,
         )
 
-        text = (response.text or "").strip()
+        text = (completion.choices[0].message.content or "").strip()
         if not text:
-            raise GeminiError("Gemini returned an empty response")
+            raise LLMError("LLM returned an empty response")
         return text
 
     def _evaluate_answer_depth_sync(
@@ -181,25 +181,24 @@ class GeminiService:
             ),
         )
 
-        response = self._client.models.generate_content(
+        completion = self._client.chat.completions.create(
             model=self._model,
-            contents=EVALUATE_USER_CONTENT,
-            config=types.GenerateContentConfig(
-                system_instruction=prompt,
-                temperature=0.1,
-                response_mime_type="application/json",
-                response_schema=AnswerDepthResult,
-            ),
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": EVALUATE_USER_CONTENT},
+            ],
+            temperature=0.1,
+            response_format={"type": "json_object"},
         )
 
-        text = (response.text or "").strip()
+        text = (completion.choices[0].message.content or "").strip()
         if not text:
-            raise GeminiError("Gemini returned an empty evaluation response")
+            raise LLMError("LLM returned an empty evaluation response")
 
         try:
             return AnswerDepthResult.model_validate(json.loads(text))
         except (json.JSONDecodeError, ValidationError) as exc:
-            raise GeminiError(f"Invalid evaluation JSON: {exc}") from exc
+            raise LLMError(f"Invalid evaluation JSON: {exc}") from exc
 
     async def generate_interview_turn(
         self,
@@ -235,21 +234,21 @@ class GeminiService:
                 parent_question,
                 parent_answer,
             )
-        except GeminiError:
+        except LLMError:
             raise
         except Exception as exc:
-            raise GeminiError(str(exc)) from exc
+            raise LLMError(str(exc)) from exc
 
 
 def default_answer_depth_result() -> AnswerDepthResult:
     return AnswerDepthResult(answer_depth="shallow", answered_question=False)
 
 
-_gemini_service: GeminiService | None = None
+_llm_service: GroqService | None = None
 
 
-def get_gemini_service() -> GeminiService:
-    global _gemini_service
-    if _gemini_service is None:
-        _gemini_service = GeminiService()
-    return _gemini_service
+def get_llm_service() -> GroqService:
+    global _llm_service
+    if _llm_service is None:
+        _llm_service = GroqService()
+    return _llm_service
