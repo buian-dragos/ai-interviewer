@@ -21,7 +21,7 @@ export function AnalysisMetricLabel({
     <div className="flex items-center gap-1.5">
       <p className="text-base font-medium text-foreground">{label}</p>
       {tooltip ? (
-        <HoverCard openDelay={100} closeDelay={100}>
+        <HoverCard>
           <HoverCardTrigger
             render={
               <button

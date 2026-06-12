@@ -39,6 +39,8 @@ class AnswerSentiment(BaseModel):
 class AnswerEvaluation(BaseModel):
     answer_depth: AnswerDepth
     answered_question: bool
+    evaluation_reason: str | None = None
+    suggestions: str | None = None
     sentiment_label: SentimentLabel | None = None
     sentiment_score: float | None = None
     keywords: list[KeywordMatch] | None = None
@@ -53,6 +55,8 @@ class InterviewQuestionResponse(BaseModel):
     created_at: datetime
     answer_depth: AnswerDepth | None = None
     answered_question: bool | None = None
+    evaluation_reason: str | None = None
+    suggestions: str | None = None
     follows_question_id: UUID | None = None
     core_sequence: int = Field(ge=1, le=CORE_QUESTIONS_TOTAL)
     sentiment_label: SentimentLabel | None = None

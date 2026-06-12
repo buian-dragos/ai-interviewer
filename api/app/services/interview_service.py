@@ -103,6 +103,8 @@ class InterviewService:
             created_at=row["created_at"],
             answer_depth=row.get("answer_depth"),
             answered_question=row.get("answered_question"),
+            evaluation_reason=row.get("evaluation_reason"),
+            suggestions=row.get("suggestions"),
             follows_question_id=row.get("follows_question_id"),
             core_sequence=self._core_sequence(row),
             sentiment_label=row.get("sentiment_label"),
@@ -271,6 +273,8 @@ class InterviewService:
         question_id: str,
         answer_depth: str,
         answered_question: bool,
+        evaluation_reason: str | None = None,
+        suggestions: str | None = None,
     ) -> None:
         try:
             await (
@@ -279,6 +283,8 @@ class InterviewService:
                     {
                         "answer_depth": answer_depth,
                         "answered_question": answered_question,
+                        "evaluation_reason": evaluation_reason,
+                        "suggestions": suggestions,
                     }
                 )
                 .eq("id", question_id)
@@ -377,7 +383,8 @@ class InterviewService:
             await self.supabase.table("interview_questions")
             .select(
                 "id, sequence, question, answer, answered_at, created_at, "
-                "answer_depth, answered_question, follows_question_id, "
+                "answer_depth, answered_question, evaluation_reason, suggestions, "
+                "follows_question_id, "
                 "sentiment_label, sentiment_score, keywords"
             )
             .eq("interview_id", interview_id)
@@ -836,15 +843,21 @@ class InterviewService:
                 question_id_str,
                 depth_result.answer_depth,
                 depth_result.answered_question,
+                depth_result.evaluation_reason,
+                depth_result.suggestions,
             )
             evaluation = AnswerEvaluation(
                 answer_depth=depth_result.answer_depth,
                 answered_question=depth_result.answered_question,
+                evaluation_reason=depth_result.evaluation_reason,
+                suggestions=depth_result.suggestions,
             )
             saved = saved.model_copy(
                 update={
                     "answer_depth": depth_result.answer_depth,
                     "answered_question": depth_result.answered_question,
+                    "evaluation_reason": depth_result.evaluation_reason,
+                    "suggestions": depth_result.suggestions,
                 }
             )
         except Exception:

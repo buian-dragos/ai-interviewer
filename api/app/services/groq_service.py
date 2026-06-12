@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 
 from groq import Groq
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from app.core.config import get_settings
 from app.schemas.interviews import AnswerDepth
@@ -103,6 +103,8 @@ class InterviewSummaryLLMResult(BaseModel):
 class AnswerDepthResult(BaseModel):
     answer_depth: AnswerDepth
     answered_question: bool
+    evaluation_reason: str | None = Field(default=None, max_length=500)
+    suggestions: str | None = Field(default=None, max_length=500)
 
 
 def format_current_stage(is_follow_up: bool, core_sequence: int) -> str:

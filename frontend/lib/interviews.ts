@@ -19,6 +19,8 @@ export type AnswerSentiment = {
 export type AnswerEvaluation = {
   answer_depth: AnswerDepth;
   answered_question: boolean;
+  evaluation_reason?: string | null;
+  suggestions?: string | null;
   sentiment_label?: SentimentLabel;
   sentiment_score?: number;
   keywords?: KeywordMatch[];
@@ -70,6 +72,8 @@ export type InterviewQuestion = {
   created_at: string;
   answer_depth: AnswerDepth | null;
   answered_question: boolean | null;
+  evaluation_reason: string | null;
+  suggestions: string | null;
   follows_question_id: string | null;
   core_sequence: number;
   sentiment_label: SentimentLabel | null;

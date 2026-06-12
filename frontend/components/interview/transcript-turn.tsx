@@ -213,6 +213,28 @@ export function TranscriptTurn({
               </div>
             ) : null}
 
+            {question.evaluation_reason ? (
+              <div className="space-y-2">
+                <p className="text-base font-medium text-foreground">
+                  Evaluation
+                </p>
+                <p className="text-base leading-relaxed text-muted-foreground">
+                  {question.evaluation_reason}
+                </p>
+              </div>
+            ) : null}
+
+            {question.suggestions ? (
+              <div className="space-y-2">
+                <p className="text-base font-medium text-foreground">
+                  Suggestions
+                </p>
+                <p className="text-base leading-relaxed text-muted-foreground">
+                  {question.suggestions}
+                </p>
+              </div>
+            ) : null}
+
             {question.sentiment_label != null &&
             question.sentiment_score != null ? (
               <div className="space-y-2">
