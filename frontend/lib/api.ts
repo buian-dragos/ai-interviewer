@@ -1,6 +1,7 @@
 import type {
   Interview,
   InterviewQuestion,
+  InterviewSummaryResponse,
   SubmitAnswerResult,
 } from "@/lib/interviews";
 
@@ -129,6 +130,10 @@ export const api = {
       },
     );
   },
+
+  getInterviewSummary(interviewId: string) {
+    return request<InterviewSummaryResponse>(`/interviews/${interviewId}/summary`);
+  },
 };
 
 export function getApiUrl() {
@@ -187,4 +192,14 @@ export async function getInterviewServer(
   id: string,
 ): Promise<Interview> {
   return requestServer<Interview>(`/interviews/${id}`, cookieList);
+}
+
+export async function getInterviewSummaryServer(
+  cookieList: Array<{ name: string; value: string }>,
+  id: string,
+): Promise<InterviewSummaryResponse> {
+  return requestServer<InterviewSummaryResponse>(
+    `/interviews/${id}/summary`,
+    cookieList,
+  );
 }

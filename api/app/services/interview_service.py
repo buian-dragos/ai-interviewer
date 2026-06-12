@@ -9,7 +9,12 @@ from app.schemas.interviews import (
     AnswerEvaluation,
     InterviewQuestionResponse,
     InterviewResponse,
+    InterviewSummaryResponse,
+    InterviewSummaryResult,
+    KeywordMatch,
     SubmitAnswerResponse,
+    Theme,
+    AnswerSentiment,
 )
 from app.services.answer_evaluation_service import (
     evaluate_answer_depth,
@@ -22,6 +27,11 @@ from app.services.groq_service import (
     format_current_stage,
     format_follow_up_user_content,
     get_llm_service,
+)
+from app.services.summary_service import (
+    aggregate_sentiment,
+    build_answer_sentiments,
+    build_summary_result,
 )
 
 logger = logging.getLogger(__name__)
@@ -79,6 +89,11 @@ class InterviewService:
         return core_sequence * 100 + 1
 
     def _to_question_response(self, row: dict) -> InterviewQuestionResponse:
+        keywords_raw = row.get("keywords")
+        keywords: list[KeywordMatch] | None = None
+        if keywords_raw:
+            keywords = [KeywordMatch.model_validate(item) for item in keywords_raw]
+
         return InterviewQuestionResponse(
             id=row["id"],
             sequence=row["sequence"],
@@ -89,6 +104,9 @@ class InterviewService:
             answered_question=row.get("answered_question"),
             follows_question_id=row.get("follows_question_id"),
             core_sequence=self._core_sequence(row),
+            sentiment_label=row.get("sentiment_label"),
+            sentiment_score=row.get("sentiment_score"),
+            keywords=keywords,
         )
 
     def _build_first_question_row(
@@ -358,7 +376,8 @@ class InterviewService:
             await self.supabase.table("interview_questions")
             .select(
                 "id, sequence, question, answer, answered_at, "
-                "answer_depth, answered_question, follows_question_id"
+                "answer_depth, answered_question, follows_question_id, "
+                "sentiment_label, sentiment_score, keywords"
             )
             .eq("interview_id", interview_id)
             .order("sequence")
@@ -366,6 +385,148 @@ class InterviewService:
         )
         questions = [self._to_question_response(row) for row in result.data or []]
         return self._order_question_timeline(questions)
+
+    async def _fetch_result(self, interview_id: str) -> dict | None:
+        result = (
+            await self.supabase.table("interviews")
+            .select("result")
+            .eq("id", interview_id)
+            .limit(1)
+            .execute()
+        )
+        if not result.data:
+            return None
+        return result.data[0].get("result")
+
+    async def _persist_summary_result(
+        self, interview_id: str, payload: dict
+    ) -> None:
+        try:
+            await (
+                self.supabase.table("interviews")
+                .update({"result": payload})
+                .eq("id", interview_id)
+                .execute()
+            )
+        except Exception as exc:
+            raise InterviewError(str(exc)) from exc
+
+    def _parse_summary_result(
+        self, raw: dict | None
+    ) -> InterviewSummaryResult:
+        if not raw:
+            return InterviewSummaryResult(status="pending")
+
+        status = raw.get("status", "ready")
+        if status == "failed":
+            return InterviewSummaryResult(
+                status="failed",
+                error=raw.get("error"),
+            )
+
+        if status == "pending":
+            return InterviewSummaryResult(status="pending")
+
+        themes = [Theme.model_validate(item) for item in raw.get("themes", [])]
+        top_keywords = [
+            KeywordMatch.model_validate(item) for item in raw.get("top_keywords", [])
+        ]
+        keywords = [
+            KeywordMatch.model_validate(item) for item in raw.get("keywords", [])
+        ]
+        answer_sentiments = [
+            AnswerSentiment.model_validate(item)
+            for item in raw.get("answer_sentiments", [])
+        ]
+
+        return InterviewSummaryResult(
+            status="ready",
+            summary=raw.get("summary"),
+            themes=themes,
+            highlights=raw.get("highlights", []),
+            strengths=raw.get("strengths", []),
+            growth_areas=raw.get("growth_areas", []),
+            overall_sentiment_label=raw.get("overall_sentiment_label"),
+            overall_sentiment_score=raw.get("overall_sentiment_score"),
+            answers_scored=raw.get("answers_scored", 0),
+            answer_sentiments=answer_sentiments,
+            top_keywords=top_keywords,
+            keywords=keywords,
+            generated_at=raw.get("generated_at"),
+        )
+
+    async def _apply_live_sentiment(
+        self,
+        interview_id: str,
+        summary: InterviewSummaryResult,
+    ) -> InterviewSummaryResult:
+        questions = await self._fetch_all_questions(interview_id)
+        label, score, count = aggregate_sentiment(questions)
+        answer_sentiments = build_answer_sentiments(questions)
+        return summary.model_copy(
+            update={
+                "overall_sentiment_label": label,
+                "overall_sentiment_score": score,
+                "answers_scored": count,
+                "answer_sentiments": answer_sentiments,
+            }
+        )
+
+    async def _generate_and_persist_summary(self, interview_id: str) -> None:
+        existing = await self._fetch_result(interview_id)
+        if existing and existing.get("status") == "ready":
+            return
+
+        try:
+            interview_result = (
+                await self.supabase.table("interviews")
+                .select("category")
+                .eq("id", interview_id)
+                .limit(1)
+                .execute()
+            )
+            if not interview_result.data:
+                return
+
+            category = interview_result.data[0]["category"]
+            payload = await build_summary_result(
+                category=category,
+                interview_id=interview_id,
+                supabase=self.supabase,
+                refetch_questions=lambda: self._fetch_all_questions(interview_id),
+            )
+            payload["status"] = "ready"
+            payload["generated_at"] = datetime.now(UTC).isoformat()
+            await self._persist_summary_result(interview_id, payload)
+        except LLMError as exc:
+            logger.exception(
+                "Summary generation failed for interview %s", interview_id
+            )
+            await self._persist_summary_result(
+                interview_id,
+                {"status": "failed", "error": exc.message},
+            )
+        except Exception as exc:
+            logger.exception(
+                "Summary generation failed for interview %s", interview_id
+            )
+            await self._persist_summary_result(
+                interview_id,
+                {"status": "failed", "error": str(exc)},
+            )
+
+    def _schedule_summary_generation(self, interview_id: str) -> None:
+        asyncio.create_task(self._generate_and_persist_summary(interview_id))
+
+    async def _try_start_summary_generation(self, interview_id: str) -> None:
+        existing = await self._fetch_result(interview_id)
+        if existing:
+            status = existing.get("status")
+            if status in ("ready", "pending", "failed"):
+                return
+
+        await self._persist_summary_result(interview_id, {"status": "pending"})
+        self._schedule_summary_generation(interview_id)
 
     async def _get_question_by_id(
         self, interview_id: str, question_id: str
@@ -423,6 +584,8 @@ class InterviewService:
             )
         except Exception as exc:
             raise InterviewError(str(exc)) from exc
+
+        await self._try_start_summary_generation(interview_id)
 
     async def create(
         self,
@@ -767,4 +930,63 @@ class InterviewService:
             questions=questions,
             next_question_id=next_question_id,
             evaluation=evaluation,
+        )
+
+    async def get_summary(
+        self,
+        interview_id: UUID,
+        user_id: str,
+        access_token: str,
+        refresh_token: str | None,
+    ) -> InterviewSummaryResponse | None:
+        interview = await self.get_by_id(
+            interview_id=interview_id,
+            user_id=user_id,
+            access_token=access_token,
+            refresh_token=refresh_token,
+        )
+        if interview is None:
+            return None
+
+        if interview.status != "completed":
+            raise InterviewError("Interview is not completed")
+
+        await self._bind_session(access_token, refresh_token)
+        interview_id_str = str(interview_id)
+        raw_result = await self._fetch_result(interview_id_str)
+
+        if raw_result is None:
+            await self._try_start_summary_generation(interview_id_str)
+            summary = await self._apply_live_sentiment(
+                interview_id_str,
+                InterviewSummaryResult(status="pending"),
+            )
+            return InterviewSummaryResponse(
+                interview=interview,
+                summary=summary,
+            )
+
+        if raw_result.get("status") == "pending":
+            summary = await self._apply_live_sentiment(
+                interview_id_str,
+                InterviewSummaryResult(status="pending"),
+            )
+            return InterviewSummaryResponse(
+                interview=interview,
+                summary=summary,
+            )
+
+        if raw_result.get("status") == "failed":
+            return InterviewSummaryResponse(
+                interview=interview,
+                summary=self._parse_summary_result(raw_result),
+            )
+
+        summary = await self._apply_live_sentiment(
+            interview_id_str,
+            self._parse_summary_result(raw_result),
+        )
+        return InterviewSummaryResponse(
+            interview=interview,
+            summary=summary,
         )

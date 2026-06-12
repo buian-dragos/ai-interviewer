@@ -1,8 +1,9 @@
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 
-import { ApiError, getInterviewServer } from "@/lib/api";
-import { formatInterviewDate, isFinished } from "@/lib/interviews";
+import { InterviewSummaryView } from "@/components/interview/interview-summary-view";
+import { ApiError, getInterviewServer, getInterviewSummaryServer } from "@/lib/api";
+import { isFinished } from "@/lib/interviews";
 
 type InterviewSummaryPageProps = {
   params: Promise<{ id: string }>;
@@ -13,10 +14,11 @@ export default async function InterviewSummaryPage({
 }: InterviewSummaryPageProps) {
   const { id } = await params;
   const cookieStore = await cookies();
+  const cookieList = cookieStore.getAll();
 
   let interview;
   try {
-    interview = await getInterviewServer(cookieStore.getAll(), id);
+    interview = await getInterviewServer(cookieList, id);
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
       notFound();
@@ -28,27 +30,15 @@ export default async function InterviewSummaryPage({
     redirect(`/interview/${id}`);
   }
 
-  return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Interview summary
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Topic: {interview.category}
-        </p>
-        <p className="text-sm text-muted-foreground">
-          Started: {formatInterviewDate(interview.started_at)}
-        </p>
-        {interview.completed_at ? (
-          <p className="text-sm text-muted-foreground">
-            Completed: {formatInterviewDate(interview.completed_at)}
-          </p>
-        ) : null}
-      </div>
-      <p className="text-sm text-muted-foreground">
-        Scoring and feedback coming soon.
-      </p>
-    </div>
-  );
+  let summaryData;
+  try {
+    summaryData = await getInterviewSummaryServer(cookieList, id);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      notFound();
+    }
+    throw error;
+  }
+
+  return <InterviewSummaryView interviewId={id} initialData={summaryData} />;
 }

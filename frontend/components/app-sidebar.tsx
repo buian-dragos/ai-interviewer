@@ -32,18 +32,18 @@ import {
   getInterviewHref,
   isInProgress,
   isInterviewPathActive,
-  type InterviewSummary,
+  type Interview,
 } from "@/lib/interviews";
 import { cn } from "@/lib/utils";
 
 type AppSidebarProps = {
-  initialInterviews: InterviewSummary[];
+  initialInterviews: Interview[];
 };
 
 export function AppSidebar({ initialInterviews }: AppSidebarProps) {
   const pathname = usePathname();
   const [interviews, setInterviews] =
-    useState<InterviewSummary[]>(initialInterviews);
+    useState<Interview[]>(initialInterviews);
 
   useEffect(() => {
     let cancelled = false;

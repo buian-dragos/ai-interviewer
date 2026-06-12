@@ -78,7 +78,26 @@ def format_follow_up_user_content(
     return "\n".join(lines)
 EVALUATE_USER_CONTENT = "Evaluate the answer and return JSON only."
 
+SUMMARY_PROMPT_PATH = (
+    Path(__file__).resolve().parents[2] / "prompts" / "generate_summary.md"
+)
+SUMMARY_PROMPT_TEMPLATE = SUMMARY_PROMPT_PATH.read_text(encoding="utf-8")
+SUMMARY_USER_CONTENT = "Generate the interview summary and return JSON only."
+
 Role = str
+
+
+class ThemeResult(BaseModel):
+    title: str
+    description: str
+
+
+class InterviewSummaryLLMResult(BaseModel):
+    summary: str
+    themes: list[ThemeResult]
+    highlights: list[str] = []
+    strengths: list[str] = []
+    growth_areas: list[str] = []
 
 
 class AnswerDepthResult(BaseModel):
@@ -241,6 +260,35 @@ class GroqService:
         except (json.JSONDecodeError, ValidationError) as exc:
             raise LLMError(f"Invalid evaluation JSON: {exc}") from exc
 
+    def _generate_interview_summary_sync(
+        self,
+        category: str,
+        transcript: str,
+    ) -> InterviewSummaryLLMResult:
+        prompt = SUMMARY_PROMPT_TEMPLATE.format(
+            category=category,
+            transcript=transcript,
+        )
+
+        completion = self._client.chat.completions.create(
+            model=self._model,
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": SUMMARY_USER_CONTENT},
+            ],
+            temperature=0.4,
+            response_format={"type": "json_object"},
+        )
+
+        text = (completion.choices[0].message.content or "").strip()
+        if not text:
+            raise LLMError("LLM returned an empty summary response")
+
+        try:
+            return InterviewSummaryLLMResult.model_validate(json.loads(text))
+        except (json.JSONDecodeError, ValidationError) as exc:
+            raise LLMError(f"Invalid summary JSON: {exc}") from exc
+
     async def generate_interview_turn(
         self,
         category: str,
@@ -274,6 +322,22 @@ class GroqService:
                 category,
                 parent_question,
                 parent_answer,
+            )
+        except LLMError:
+            raise
+        except Exception as exc:
+            raise LLMError(str(exc)) from exc
+
+    async def generate_interview_summary(
+        self,
+        category: str,
+        transcript: str,
+    ) -> InterviewSummaryLLMResult:
+        try:
+            return await asyncio.to_thread(
+                self._generate_interview_summary_sync,
+                category,
+                transcript,
             )
         except LLMError:
             raise

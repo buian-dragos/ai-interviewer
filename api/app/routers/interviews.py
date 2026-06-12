@@ -9,6 +9,7 @@ from app.schemas.interviews import (
     CreateInterviewRequest,
     InterviewQuestionResponse,
     InterviewResponse,
+    InterviewSummaryResponse,
     SubmitAnswerResponse,
     UpdateInterviewAnswerRequest,
 )
@@ -185,3 +186,37 @@ async def submit_interview_answer(
         )
 
     return result
+
+
+@router.get("/{interview_id}/summary", response_model=InterviewSummaryResponse)
+async def get_interview_summary(
+    interview_id: UUID,
+    session: AuthenticatedUser = Depends(get_current_user),
+    supabase: AsyncClient = Depends(get_supabase),
+) -> InterviewSummaryResponse:
+    service = InterviewService(supabase)
+    try:
+        summary = await service.get_summary(
+            interview_id=interview_id,
+            user_id=session.user.id,
+            access_token=session.access_token,
+            refresh_token=session.refresh_token,
+        )
+    except InterviewError as exc:
+        if "not completed" in exc.message.lower():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=exc.message,
+            ) from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=exc.message,
+        ) from exc
+
+    if summary is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Interview not found",
+        )
+
+    return summary

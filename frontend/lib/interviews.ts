@@ -9,6 +9,13 @@ export type KeywordMatch = {
   score: number;
 };
 
+export type AnswerSentiment = {
+  label: string;
+  sequence: number;
+  sentiment_label: SentimentLabel;
+  sentiment_score: number;
+};
+
 export type AnswerEvaluation = {
   answer_depth: AnswerDepth;
   answered_question: boolean;
@@ -25,7 +32,34 @@ export type Interview = {
   completed_at: string | null;
 };
 
-export type InterviewSummary = Interview;
+export type Theme = {
+  title: string;
+  description: string;
+};
+
+export type SummaryStatus = "pending" | "ready" | "failed";
+
+export type InterviewSummaryResult = {
+  status: SummaryStatus;
+  summary?: string | null;
+  themes?: Theme[];
+  highlights?: string[];
+  strengths?: string[];
+  growth_areas?: string[];
+  overall_sentiment_label?: SentimentLabel | null;
+  overall_sentiment_score?: number | null;
+  answers_scored?: number;
+  answer_sentiments?: AnswerSentiment[];
+  top_keywords?: KeywordMatch[];
+  keywords?: KeywordMatch[];
+  generated_at?: string | null;
+  error?: string | null;
+};
+
+export type InterviewSummaryResponse = {
+  interview: Interview;
+  summary: InterviewSummaryResult;
+};
 
 export type InterviewQuestion = {
   id: string;
