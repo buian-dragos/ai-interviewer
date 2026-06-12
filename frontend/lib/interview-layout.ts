@@ -2,7 +2,7 @@ export const CORE_QUESTIONS_TOTAL = 5;
 
 export const INTERVIEW_ANSWER_MAX_CHARS = 2500;
 
-/** Fills SidebarInset; enables sticky footer layout. */
+/** Fills SidebarInset content area; enables sticky footer layout. */
 export const INTERVIEW_PAGE_MAIN_CLASS =
   "flex min-h-0 flex-1 flex-col items-center p-6";
 

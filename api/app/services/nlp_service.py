@@ -40,6 +40,11 @@ def _get_keybert():
     return _keybert
 
 
+def preload_keybert() -> None:
+    """Warm KeyBERT model load; safe to call from a background thread."""
+    _get_keybert()
+
+
 def score_sentiment(text: str) -> tuple[SentimentLabel, float]:
     scores = _get_analyzer().polarity_scores(text)
     compound = float(scores["compound"])

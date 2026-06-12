@@ -77,12 +77,12 @@ export function AppSidebar({ initialInterviews }: AppSidebarProps) {
         <SidebarTrigger />
       </SidebarHeader>
 
-      <SidebarContent>
-        <SidebarGroup className="group-data-[collapsible=icon]:py-0">
+      <SidebarContent className="flex min-h-0 flex-1 flex-col">
+        <SidebarGroup className="flex min-h-0 flex-1 flex-col group-data-[collapsible=icon]:py-0">
           <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden">
             Past interviews
           </SidebarGroupLabel>
-          <SidebarGroupContent>
+          <SidebarGroupContent className="flex min-h-0 flex-1 flex-col">
             {interviews.length === 0 ? (
               <>
                 <div className="group-data-[collapsible=icon]:hidden">

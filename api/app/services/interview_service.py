@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+import asyncio
 import logging
 from uuid import UUID
 
@@ -10,20 +11,23 @@ from app.schemas.interviews import (
     InterviewResponse,
     SubmitAnswerResponse,
 )
-from app.services.answer_evaluation_service import evaluate_answer
+from app.services.answer_evaluation_service import (
+    evaluate_answer_depth,
+    run_nlp_analysis,
+)
 from app.services.groq_service import (
     LLMError,
     CORE_QUESTION_USER_CONTENT,
-    FOLLOW_UP_USER_CONTENT,
     OPENING_USER_CONTENT,
     format_current_stage,
+    format_follow_up_user_content,
     get_llm_service,
 )
 
 logger = logging.getLogger(__name__)
 
 CORE_QUESTION_TEMPLATES = [
-    "What experience do you have related to {category}?",
+    "What's a recent moment or experience with {category} that stands out to you?",
     "Describe a specific situation where you applied skills relevant to {category}. What was the outcome?",
     "What challenges have you faced in the context of {category}, and how did you overcome them?",
     "How do you stay current with developments in {category}?",
@@ -31,7 +35,12 @@ CORE_QUESTION_TEMPLATES = [
 ]
 
 FOLLOW_UP_TEMPLATE = (
-    "Could you go into more detail? What specific actions did you take, and what was the outcome?"
+    "Could you walk me through a specific example with a bit more detail?"
+)
+
+FOLLOW_UP_NOT_ANSWERED_TEMPLATE = (
+    "Let me ask that a slightly different way — what comes to mind when you think "
+    "about that in your own experience?"
 )
 
 class InterviewError(Exception):
@@ -181,7 +190,19 @@ class InterviewService:
         category: str,
         core_sequence: int,
         history: list[tuple[str, str]],
+        original_question: str,
+        evaluation: AnswerEvaluation,
     ) -> str:
+        user_content = format_follow_up_user_content(
+            original_question=original_question,
+            answer_depth=evaluation.answer_depth,
+            answered_question=evaluation.answered_question,
+        )
+        fallback = (
+            FOLLOW_UP_NOT_ANSWERED_TEMPLATE
+            if not evaluation.answered_question
+            else FOLLOW_UP_TEMPLATE
+        )
         try:
             return await get_llm_service().generate_interview_turn(
                 category=category,
@@ -189,17 +210,17 @@ class InterviewService:
                     is_follow_up=True, core_sequence=core_sequence
                 ),
                 history=history,
-                user_content=FOLLOW_UP_USER_CONTENT,
+                user_content=user_content,
             )
         except LLMError as exc:
             logger.warning(
                 "LLM failed to generate follow-up, using template: %s",
                 exc.message,
             )
-            return FOLLOW_UP_TEMPLATE
+            return fallback
         except Exception:
             logger.exception("Unexpected error generating follow-up, using template")
-            return FOLLOW_UP_TEMPLATE
+            return fallback
 
     def _should_generate_next_core(
         self, question_row: dict, follow_up_created: bool
@@ -225,23 +246,20 @@ class InterviewService:
         )
         return bool(result.data)
 
-    async def _persist_answer_evaluation(
+    async def _persist_depth_evaluation(
         self,
         interview_id: str,
         question_id: str,
-        evaluation: AnswerEvaluation,
+        answer_depth: str,
+        answered_question: bool,
     ) -> None:
-        keywords_payload = [keyword.model_dump() for keyword in evaluation.keywords]
         try:
             await (
                 self.supabase.table("interview_questions")
                 .update(
                     {
-                        "sentiment_label": evaluation.sentiment_label,
-                        "sentiment_score": evaluation.sentiment_score,
-                        "keywords": keywords_payload,
-                        "answer_depth": evaluation.answer_depth,
-                        "answered_question": evaluation.answered_question,
+                        "answer_depth": answer_depth,
+                        "answered_question": answered_question,
                     }
                 )
                 .eq("id", question_id)
@@ -250,6 +268,66 @@ class InterviewService:
             )
         except Exception as exc:
             raise InterviewError(str(exc)) from exc
+
+    async def _persist_nlp_evaluation(
+        self,
+        interview_id: str,
+        question_id: str,
+        sentiment_label: str,
+        sentiment_score: float,
+        keywords: list,
+    ) -> None:
+        keywords_payload = [keyword.model_dump() for keyword in keywords]
+        try:
+            await (
+                self.supabase.table("interview_questions")
+                .update(
+                    {
+                        "sentiment_label": sentiment_label,
+                        "sentiment_score": sentiment_score,
+                        "keywords": keywords_payload,
+                    }
+                )
+                .eq("id", question_id)
+                .eq("interview_id", interview_id)
+                .execute()
+            )
+        except Exception as exc:
+            raise InterviewError(str(exc)) from exc
+
+    async def _complete_nlp_analysis(
+        self,
+        interview_id: str,
+        question_id: str,
+        answer: str,
+    ) -> None:
+        try:
+            result = await run_nlp_analysis(answer)
+            if result is None:
+                return
+            sentiment_label, sentiment_score, keywords = result
+            await self._persist_nlp_evaluation(
+                interview_id,
+                question_id,
+                sentiment_label,
+                sentiment_score,
+                keywords,
+            )
+        except Exception:
+            logger.exception(
+                "Background NLP analysis failed for question %s",
+                question_id,
+            )
+
+    def _schedule_nlp_analysis(
+        self,
+        interview_id: str,
+        question_id: str,
+        answer: str,
+    ) -> None:
+        asyncio.create_task(
+            self._complete_nlp_analysis(interview_id, question_id, answer)
+        )
 
     def _order_question_timeline(
         self, questions: list[InterviewQuestionResponse]
@@ -566,6 +644,7 @@ class InterviewService:
             raise InterviewError("Failed to save answer")
 
         saved = self._to_question_response(update_result.data[0])
+        self._schedule_nlp_analysis(interview_id_str, question_id_str, stripped)
 
         evaluation: AnswerEvaluation | None = None
         parent_question: str | None = None
@@ -581,22 +660,27 @@ class InterviewService:
                     parent_answer = parent_row.get("answer")
 
         try:
-            evaluation = await evaluate_answer(
+            depth_result = await evaluate_answer_depth(
                 question=question_row["question"],
                 answer=stripped,
                 category=interview.category,
                 parent_question=parent_question,
                 parent_answer=parent_answer,
             )
-            await self._persist_answer_evaluation(
+            await self._persist_depth_evaluation(
                 interview_id_str,
                 question_id_str,
-                evaluation,
+                depth_result.answer_depth,
+                depth_result.answered_question,
+            )
+            evaluation = AnswerEvaluation(
+                answer_depth=depth_result.answer_depth,
+                answered_question=depth_result.answered_question,
             )
             saved = saved.model_copy(
                 update={
-                    "answer_depth": evaluation.answer_depth,
-                    "answered_question": evaluation.answered_question,
+                    "answer_depth": depth_result.answer_depth,
+                    "answered_question": depth_result.answered_question,
                 }
             )
         except Exception:
@@ -620,6 +704,8 @@ class InterviewService:
                     category=interview.category,
                     core_sequence=core_sequence,
                     history=history,
+                    original_question=question_row["question"],
+                    evaluation=evaluation,
                 )
                 try:
                     await (

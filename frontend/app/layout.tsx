@@ -30,9 +30,9 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${roboto.variable} ${robotoMono.variable} h-full antialiased`}
+      className={`${roboto.variable} ${robotoMono.variable} h-full min-h-svh antialiased`}
     >
-      <body suppressHydrationWarning className="flex min-h-full flex-col">
+      <body suppressHydrationWarning className="flex min-h-svh flex-col bg-background">
         <Providers>{children}</Providers>
       </body>
     </html>

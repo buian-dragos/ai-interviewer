@@ -29,7 +29,7 @@ export default async function InterviewSummaryPage({
   }
 
   return (
-    <main className="flex flex-col gap-6 p-6">
+    <div className="flex flex-1 flex-col gap-6 p-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">
           Interview summary
@@ -49,6 +49,6 @@ export default async function InterviewSummaryPage({
       <p className="text-sm text-muted-foreground">
         Scoring and feedback coming soon.
       </p>
-    </main>
+    </div>
   );
 }

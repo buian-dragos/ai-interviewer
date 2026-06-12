@@ -30,11 +30,11 @@ class KeywordMatch(BaseModel):
 
 
 class AnswerEvaluation(BaseModel):
-    sentiment_label: SentimentLabel
-    sentiment_score: float
-    keywords: list[KeywordMatch]
     answer_depth: AnswerDepth
     answered_question: bool
+    sentiment_label: SentimentLabel | None = None
+    sentiment_score: float | None = None
+    keywords: list[KeywordMatch] | None = None
 
 
 class InterviewQuestionResponse(BaseModel):

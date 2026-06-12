@@ -20,21 +20,62 @@ EVALUATE_PROMPT_PATH = (
 EVALUATE_PROMPT_TEMPLATE = EVALUATE_PROMPT_PATH.read_text(encoding="utf-8")
 
 EMPTY_HISTORY_SENTINEL = (
-    "(No conversation yet — open with a brief greeting, then ask one general but "
-    "focused opening question about the topic. Do not make it very broad.)"
+    "(No conversation yet — this is Core Question 1. Open naturally: you may skip a "
+    "standalone greeting or weave a brief welcome into the question. Ask one focused "
+    "opening question that enters the topic from a specific angle — not a generic "
+    "'how do you engage with…' prompt.)"
 )
 OPENING_USER_CONTENT = (
-    "Generate your opening response: a brief greeting and one general but "
-    "focused opening question."
+    "Generate Core Question 1. Use a fresh, specific angle into the topic — avoid "
+    "formulaic openings like 'how do you usually engage with…' or 'tell me about your "
+    "relationship with…'. A short greeting is optional; do not always start with "
+    "'To start,' or 'Hi!'. One question only."
 )
 CORE_QUESTION_USER_CONTENT = (
     "Generate the next core interview question based on the instructions, "
     "current stage, and transcript."
 )
 FOLLOW_UP_USER_CONTENT = (
-    "The participant's last answer was shallow or did not fully address the question. "
-    "Generate a brief acknowledgment and one probing follow-up based on the transcript."
+    "Generate the single allowed follow-up. No greeting or pleasantries — "
+    "output only the follow-up question."
 )
+
+
+def format_follow_up_user_content(
+    original_question: str,
+    answer_depth: str,
+    answered_question: bool,
+) -> str:
+    lines = [
+        "Generate the single allowed follow-up for the core question below.",
+        "No greeting, no pleasantries, no acknowledgment — output only the follow-up question.",
+        "",
+        "<original_core_question>",
+        original_question,
+        "</original_core_question>",
+        "",
+        "<evaluation>",
+        f"answer_depth: {answer_depth}",
+        f"answered_question: {answered_question}",
+        "</evaluation>",
+        "",
+    ]
+
+    if not answered_question:
+        lines.append(
+            "The answer did not meaningfully address the original question. "
+            "Reframe from a different angle or add clearer guidance so the participant "
+            "knows what to answer. Do not repeat the same wording verbatim."
+        )
+    if answer_depth == "shallow":
+        lines.append(
+            "The answer was too thin. Encourage elaboration — a concrete example, "
+            "specific details, or a walkthrough of what happened. Build on what they "
+            "already said when possible."
+        )
+
+    lines.append("One question only.")
+    return "\n".join(lines)
 EVALUATE_USER_CONTENT = "Evaluate the answer and return JSON only."
 
 Role = str
@@ -155,7 +196,7 @@ class GroqService:
                 {"role": "system", "content": system_instruction},
                 {"role": "user", "content": user_content},
             ],
-            temperature=0.7,
+            temperature=0.85,
         )
 
         text = (completion.choices[0].message.content or "").strip()

@@ -213,7 +213,7 @@ export function InterviewSession({ interview }: InterviewSessionProps) {
   }
 
   return (
-    <main className={INTERVIEW_PAGE_MAIN_CLASS}>
+    <div className={INTERVIEW_PAGE_MAIN_CLASS}>
       <div className={INTERVIEW_PAGE_INNER_CLASS}>
         <header className="flex flex-col gap-4">
           <h1 className="text-center text-2xl font-bold tracking-tight text-balance md:text-3xl">
@@ -313,6 +313,6 @@ export function InterviewSession({ interview }: InterviewSessionProps) {
           />
         </footer>
       </div>
-    </main>
+    </div>
   );
 }

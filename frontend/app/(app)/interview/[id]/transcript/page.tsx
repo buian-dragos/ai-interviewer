@@ -29,7 +29,7 @@ export default async function InterviewTranscriptPage({
   }
 
   return (
-    <main className="flex flex-col gap-6 p-6">
+    <div className="flex flex-1 flex-col gap-6 p-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">
           Interview transcript
@@ -44,6 +44,6 @@ export default async function InterviewTranscriptPage({
       <p className="text-sm text-muted-foreground">
         Transcript coming soon.
       </p>
-    </main>
+    </div>
   );
 }

@@ -10,11 +10,11 @@ export type KeywordMatch = {
 };
 
 export type AnswerEvaluation = {
-  sentiment_label: SentimentLabel;
-  sentiment_score: number;
-  keywords: KeywordMatch[];
   answer_depth: AnswerDepth;
   answered_question: boolean;
+  sentiment_label?: SentimentLabel;
+  sentiment_score?: number;
+  keywords?: KeywordMatch[];
 };
 
 export type Interview = {

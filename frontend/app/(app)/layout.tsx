@@ -21,9 +21,9 @@ export default async function AppLayout({
   }
 
   return (
-    <SidebarProvider>
+    <SidebarProvider className="min-h-svh flex-1 bg-background">
       <AppSidebar initialInterviews={interviews} />
-      <SidebarInset>
+      <SidebarInset className="min-h-svh flex flex-1 flex-col">
         <MobileSidebarTrigger />
         {children}
       </SidebarInset>
