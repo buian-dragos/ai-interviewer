@@ -279,16 +279,3 @@ ai-interviewer/
 | NLP | NLTK VADER, KeyBERT |
 | Database & Auth | Supabase (Postgres + Auth) |
 | Deployment | Vercel (frontend), Railway or similar (API) |
-
----
-
-## What graders are evaluating
-
-The assignment evaluates four areas — how this project addresses each:
-
-| Criterion | Approach |
-|-----------|----------|
-| **Code clarity and structure** | Routers → services → external integrations; typed schemas; prompts separated from code; SQL migrations with RLS |
-| **Prompt design and LLM interaction** | Three dedicated prompt files with strict JSON outputs, transcript-aware question generation, fallbacks on LLM failure |
-| **User experience** | Polished web UI with progress, follow-up flow, summary/transcript views, and clear topic selection |
-| **Polished AI tool** | Goes beyond the minimum: adaptive follow-ups, per-answer evaluation, sentiment/keywords, auth, Docker, and a hosted demo |
