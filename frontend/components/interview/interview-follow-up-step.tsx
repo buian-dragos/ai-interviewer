@@ -62,14 +62,14 @@ export function InterviewFollowUpStep({
     <div
       className={cn(
         INTERVIEW_CONTENT_CLASS,
-        "mt-10 flex min-h-0 flex-1 flex-col md:mt-14",
+        "mt-10 flex shrink-0 flex-col md:mt-14",
       )}
     >
       <Accordion
         keepMounted
         value={openPanel}
         onValueChange={handlePanelChange}
-        className="flex min-h-0 flex-1 flex-col"
+        className="flex w-full flex-col"
       >
         <AccordionItem value="original" className="shrink-0 border-b border-border">
           <AccordionTrigger

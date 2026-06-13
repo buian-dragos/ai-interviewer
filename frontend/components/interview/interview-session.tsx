@@ -21,6 +21,7 @@ import {
   INTERVIEW_PAGE_INNER_CLASS,
   INTERVIEW_PAGE_MAIN_CLASS,
   INTERVIEW_QUESTION_SLOT_CLASS,
+  scrollInterviewPageToBottom,
 } from "@/lib/interview-layout";
 import {
   findFirstUnsubmittedStepIndex,
@@ -126,6 +127,41 @@ export function InterviewSession({ interview }: InterviewSessionProps) {
       setAnswer(currentQuestion.answer ?? "");
     }
   }, [currentQuestion]);
+
+  useEffect(() => {
+    if (
+      isLoading ||
+      isEvaluating ||
+      !currentQuestion ||
+      !isFollowUp ||
+      !parentCoreQuestion
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const scrollToBottom = () => {
+      if (!cancelled) {
+        scrollInterviewPageToBottom();
+      }
+    };
+
+    const timeouts = [200, 450, 750].map((delay) =>
+      window.setTimeout(scrollToBottom, delay),
+    );
+
+    return () => {
+      cancelled = true;
+      timeouts.forEach((timeout) => window.clearTimeout(timeout));
+    };
+  }, [
+    isLoading,
+    isEvaluating,
+    isFollowUp,
+    parentCoreQuestion?.id,
+    currentQuestion?.id,
+  ]);
 
   const goToStep = useCallback(
     (questionId: string | null, updatedQuestions: InterviewQuestion[]) => {
@@ -312,6 +348,11 @@ export function InterviewSession({ interview }: InterviewSessionProps) {
             onNext={handleNext}
           />
         </footer>
+        <div
+          data-interview-scroll-anchor
+          className="h-px w-full shrink-0"
+          aria-hidden="true"
+        />
       </div>
     </div>
   );

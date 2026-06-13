@@ -30,3 +30,23 @@ export const INTERVIEW_NAV_FOOTER_CLASS =
 
 export const INTERVIEW_ANSWER_TEXTAREA_CLASS =
   "min-h-72 w-full resize-y px-4 pt-4 pb-10 text-base touch-manipulation md:min-h-80";
+
+export function scrollInterviewPageToBottom() {
+  const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ? "auto"
+    : "smooth";
+
+  const anchor = document.querySelector("[data-interview-scroll-anchor]");
+  if (anchor) {
+    anchor.scrollIntoView({ behavior, block: "end" });
+    return;
+  }
+
+  window.scrollTo({
+    top: Math.max(
+      document.documentElement.scrollHeight,
+      document.body.scrollHeight,
+    ),
+    behavior,
+  });
+}
