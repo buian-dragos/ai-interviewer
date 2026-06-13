@@ -1,6 +1,6 @@
 # AI Interviewer
 
-A mini AI-powered interview app inspired by [Anthropic's Interviewer](https://www.anthropic.com/news/anthropic-interviewer). Users pick a topic, answer five sequential AI-generated questions, and receive a structured summary with themes, sentiment, and keywords. Transcripts and summaries are stored in Supabase Postgres.
+A mini AI-powered interview app inspired by [Anthropic's Interviewer](https://www.anthropic.com/news/anthropic-interviewer). Users pick a topic, answer five sequential AI-generated core questions, and receive a structured summary with themes, sentiment, and keywords. Questions are **adaptive**: after each answer, the LLM evaluates depth and relevance; if a response was shallow or did not address the question, the interviewer generates **one follow-up** before moving to the next core question. Transcripts and summaries are stored in Supabase Postgres.
 
 **Live demo:** [https://buian-ai-interviewer.vercel.app/](https://buian-ai-interviewer.vercel.app/)
 
@@ -20,8 +20,8 @@ This project fulfills the core brief:
 | Requirement | Implementation |
 |-------------|----------------|
 | Start an interview on a chosen topic | Preset categories (e.g. “AI in the Workplace”) or a custom topic on the home page |
-| Generate 3–5 sequential AI questions | Five core questions, generated one at a time via Groq after each answer |
-| Collect answers interactively | Web UI with answer composer, submit flow, and optional follow-ups |
+| Generate 3–5 sequential AI questions | Five core questions, generated one at a time via Groq after each answer. **Adaptive follow-ups:** if an answer is shallow or off-topic, the LLM inserts one extra probe before advancing (follow-ups do not count toward the five core questions) |
+| Collect answers interactively | Web UI with answer composer and submit flow; each answer is evaluated and may trigger a follow-up before the next core question |
 | Produce a brief AI summary at the end | LLM-generated summary with themes, highlights, strengths, and growth areas |
 | Store transcript and summary | Supabase: Q&A in `interview_questions`, summary in `interviews.result` (JSONB) |
 
