@@ -4,9 +4,7 @@ import type {
   InterviewSummaryResponse,
   SubmitAnswerResult,
 } from "@/lib/interviews";
-import { getServerApiUrl, PUBLIC_API_URL } from "@/lib/api-url";
-
-const API_URL = PUBLIC_API_URL;
+import { getBrowserApiUrl, getServerApiUrl } from "@/lib/api-url";
 
 export type User = {
   id: string;
@@ -42,7 +40,7 @@ async function parseError(response: Response): Promise<string> {
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await fetch(`${getBrowserApiUrl()}${path}`, {
     ...options,
     credentials: "include",
     headers: {
@@ -138,7 +136,7 @@ export const api = {
 };
 
 export function getApiUrl() {
-  return API_URL;
+  return getBrowserApiUrl();
 }
 
 function buildCookieHeader(

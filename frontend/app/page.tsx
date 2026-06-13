@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { getApiUrl } from "@/lib/api";
+import { getServerApiUrl } from "@/lib/api-url";
 
 async function isAuthenticated(): Promise<boolean> {
   const cookieStore = await cookies();
@@ -15,7 +15,7 @@ async function isAuthenticated(): Promise<boolean> {
   }
 
   try {
-    const response = await fetch(`${getApiUrl()}/auth/me`, {
+    const response = await fetch(`${getServerApiUrl()}/auth/me`, {
       headers: { cookie: cookieHeader },
       cache: "no-store",
     });
