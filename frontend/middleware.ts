@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { getServerApiUrl } from "@/lib/api-url";
 
 const AUTH_ROUTES = ["/login", "/signup"];
 const PROTECTED_ROUTES = ["/home", "/interview"];
@@ -13,7 +13,7 @@ async function isAuthenticated(request: NextRequest): Promise<boolean> {
   }
 
   try {
-    const response = await fetch(`${API_URL}/auth/me`, {
+    const response = await fetch(`${getServerApiUrl()}/auth/me`, {
       headers: { cookie: cookieHeader },
       cache: "no-store",
     });

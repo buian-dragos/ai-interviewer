@@ -4,8 +4,9 @@ import type {
   InterviewSummaryResponse,
   SubmitAnswerResult,
 } from "@/lib/interviews";
+import { getServerApiUrl, PUBLIC_API_URL } from "@/lib/api-url";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_URL = PUBLIC_API_URL;
 
 export type User = {
   id: string;
@@ -151,7 +152,7 @@ export async function getMeServer(
 ): Promise<User> {
   const cookieHeader = buildCookieHeader(cookieList);
 
-  const response = await fetch(`${API_URL}/auth/me`, {
+  const response = await fetch(`${getServerApiUrl()}/auth/me`, {
     headers: { cookie: cookieHeader },
     cache: "no-store",
   });
@@ -169,7 +170,7 @@ async function requestServer<T>(
 ): Promise<T> {
   const cookieHeader = buildCookieHeader(cookieList);
 
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await fetch(`${getServerApiUrl()}${path}`, {
     headers: { cookie: cookieHeader },
     cache: "no-store",
   });
